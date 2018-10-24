@@ -100,18 +100,21 @@ class Game():
         players = self._round_players()
 
         while len(players) > 1:
-            print('=' * 20)
+            if self.verbose:
+                print('=' * 20)
             round_number += 1
             if self.verbose > 0:
                 print('Round: {:,}'.format(round_number))
 
-            round_ = Round(players, self.card2score, assaf_penalty=self.assaf_penalty, seed=self.seed)
+            round_ = Round(players, self.card2score, assaf_penalty=self.assaf_penalty, verbose=self.verbose, seed=self.seed)
             if self.seed:
                 self.seed += 1
             # ====== DELETE/COMMENT-OUT: TEST PURPOSES ======
             for name, player in players.items():
                 player.score += player.hand_points
-                print(player.name, player.hand_points, player.cards_in_hand, player.score)
+
+                if self.verbose:
+                    print(player.name, player.hand_points, player.cards_in_hand, player.score)
             # ===========================
 
             # Round conclusion
@@ -129,10 +132,12 @@ class Game():
 
 
 class Round():
-    def __init__(self, players, card2score, assaf_penalty=30, seed=4):
+    def __init__(self, players, card2score, assaf_penalty=30, seed=4, verbose=0):
         self.seed = seed
+        self.verbose = verbose
         self.assaf_penalty = assaf_penalty
         self.card2score = card2score
+        self.cards_thrown = []
 
         self.players = players
 
@@ -161,7 +166,8 @@ class Round():
 
                 starting_player = name
 
-        print('Starting player: {}'.format(starting_player))
+        if self.verbose:
+            print('Starting player: {}'.format(starting_player))
 
         l_current_player_names = list(self.players.keys())
         sr_current_player_names = pd.Series(l_current_player_names)
@@ -217,7 +223,9 @@ class Round():
     def round_summary(self, name_yaniv):
         assafed = False
         yaniv_player = self.players[name_yaniv]
-        print('{} declared Yaniv with {}'.format(name_yaniv, yaniv_player.hand_points))
+
+        if self.verbose:
+            print('{} declared Yaniv with {}'.format(name_yaniv, yaniv_player.hand_points))
 
         assafers = []
         for name, player in self.players.items():
@@ -230,9 +238,11 @@ class Round():
                     assafers.append(name)
 
         if assafed:
-            print('ASSAF!')
             assafer_name = assafers[0]
-            print('by: {} (hand of {})'.format(assafers[0], self.players[assafer_name].hand_points))
+            if self.verbose:
+                print('ASSAF!')
+                print('by: {} (hand of {})'.format(assafers[0], self.players[assafer_name].hand_points))
+
             self.players[name_yaniv].hand_points += self.assaf_penalty
             self.players[assafer_name].starts_round = True
         else:
@@ -257,6 +267,7 @@ class Round():
                 cards_thrown = [cards_thrown]
 
             # print(pd.Series(cards_in_hand[card])) #.sort_values().tail(1))
+            self.cards_thrown += cards_thrown
             for card_thrown in cards_thrown:
                 del cards_in_hand[card_thrown]
 
