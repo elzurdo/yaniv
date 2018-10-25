@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 
 class Player():
@@ -201,6 +202,7 @@ class Round():
 
         if not player_order:
             player_order = self._player_order()
+
         for name, player in player_order.items():  # self.players.items():
             # print(name, player.starts_round)
             if not yaniv_declared:
@@ -216,6 +218,8 @@ class Round():
             self.play_round(player_order=player_order)
 
     def decide_declare_yaniv(self, name):
+        self._calculate_stats(name)
+
         player = self.players[name]
         if 'always' == player.yaniv_strategy:
             return True
@@ -233,6 +237,7 @@ class Round():
 
             if name != name_yaniv:
                 # print(name, player.hand_points)
+
                 if player.hand_points <= yaniv_player.hand_points:
                     assafed = True
                     assafers.append(name)
@@ -283,9 +288,37 @@ class Round():
 
             del self.round_deck[chosen_card[0]]
             player.cards_in_hand = np.append(player.cards_in_hand, chosen_card)
+        else:
+            if self.verbose > 1:
+                print("Deck is empty")
 
         player._hand_points()
         # print(name, player.cards_in_hand, player.hand_points)
+
+    def _calculate_stats(self, name):
+        cards_player = list(self.players[name].cards_in_hand)
+        cards_unknown =  list(set(self.card2score.keys()) - set(self.cards_thrown) )
+        cards_unknown = list(set(cards_unknown) - set(cards_player) )
+
+        cards_unknown_values =  []
+        for card in cards_unknown:
+            cards_unknown_values.append(self.card2score[card])
+        cards_unknown_values = pd.Series(cards_unknown_values).value_counts().sort_index()
+
+        #print(cards_unknown_values)
+        for name_other, player in self.players.items():
+            if name_other != name:
+                n_cards_other = len(player.cards_in_hand)
+                if self.verbose > 1:
+                    print("{} cards: {}".format(n_cards_other, name_other))
+
+    def prob_lowest_hand(self):
+        None
+        # count cards in others' hands
+
+        # probability lower than each individually (or as group ...?)
+
+
 
 
 
