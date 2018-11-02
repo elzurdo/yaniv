@@ -22,6 +22,22 @@ class Player():
 # * round 1
 
 
+def face_2_value(face):
+    if face == 'A':
+        return 1
+    elif face in ['J', 'Q', 'K']:
+        return 10
+    elif 'oker' in face:
+        return 0
+    else:
+        return int(face)
+
+
+def card_2_suite(card):
+    return card[0]
+def card_2_face(card):
+    return card[1:]
+
 def deck(jokers=True):
     suits = ['d', 'h', 'c', 's']  # diamonds, clubs, hearts, spades
 
@@ -39,6 +55,27 @@ def deck(jokers=True):
 
 all_card2scores = deck(jokers=True)
 
+def cards_2_df(cards):
+    #cards = game.round.players['michal'].cards_in_hand
+    df_cards = pd.DataFrame({'face': list(map(card_2_face, cards)),
+                  'suit':  list(map(card_2_suite, cards)),
+                  'value': list(map(lambda x: all_card2scores[x], cards))
+                 },
+                 index=cards)
+
+    return df_cards
+
+def cards_df_to_face_counts_df(df_cards):
+    df_face_counts = pd.DataFrame(df_cards['face'].value_counts()).rename(columns={'face': 'counts'})
+    df_face_counts.index.name = 'face'
+    df_face_counts['value'] = df_face_counts.index.map(face_2_value)
+    df_face_counts['total'] = df_face_counts['counts'] * df_face_counts['value']
+
+    return df_face_counts
+
+
+
+
 
 MAX_ROUNDS = 400
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
@@ -48,6 +85,7 @@ class Game():
         self.seed = seed
         self._players(player_names)
         self.assaf_penalty = assaf_penalty
+        self.jokers = jokers
         self.card2score = deck(jokers=jokers)
 
         #self.all_players = players
@@ -107,12 +145,21 @@ class Game():
             if self.verbose > 0:
                 print('Round: {:,}'.format(round_number))
 
-            round_ = Round(players, self.card2score, assaf_penalty=self.assaf_penalty, verbose=self.verbose, seed=self.seed)
+            self.round = Round(players, self.card2score, assaf_penalty=self.assaf_penalty, verbose=self.verbose, seed=self.seed)
+            self.round.play()
+
             if self.seed:
                 self.seed += 1
             # ====== DELETE/COMMENT-OUT: TEST PURPOSES ======
             for name, player in players.items():
                 player.score += player.hand_points
+
+                if player.score == 100:
+                    player.score = 50
+                    print("{} has exactly 100, down to 50".format(name))
+                elif player.score == 200:
+                    print("{} has exactly 200, down to 150".format(name))
+                    player.score = 150
 
                 if self.verbose:
                     print(player.name, player.hand_points, player.cards_in_hand, player.score)
@@ -141,6 +188,8 @@ class Round():
         self.cards_thrown = []
 
         self.players = players
+
+    def play(self):
 
         self.round_deck = dict(self.card2score)
 
@@ -227,6 +276,7 @@ class Round():
     def round_summary(self, name_yaniv):
         assafed = False
         yaniv_player = self.players[name_yaniv]
+        self.yaniv_points = int(yaniv_player.hand_points)
 
         if self.verbose:
             print('{} declared Yaniv with {}'.format(name_yaniv, yaniv_player.hand_points))
@@ -238,7 +288,7 @@ class Round():
             if name != name_yaniv:
                 # print(name, player.hand_points)
 
-                if player.hand_points <= yaniv_player.hand_points:
+                if player.hand_points <= self.yaniv_points: #yaniv_player.hand_points:
                     assafed = True
                     assafers.append(name)
 
@@ -254,7 +304,7 @@ class Round():
             self.players[name_yaniv].hand_points = 0  # Yaniv player does not get points
             yaniv_player.starts_round = True
 
-    def throw_card(self, name):
+    def throw_card_old(self, name):
         player = self.players[name]
         # self.throw_strategy = 'highest_card'
         # print(player.throw_strategy, player.cards_in_hand)
@@ -277,6 +327,21 @@ class Round():
                 del cards_in_hand[card_thrown]
 
             player.cards_in_hand = list(cards_in_hand)
+
+    def throw_card(self, name):
+        player = self.players[name]
+
+        df_cards = cards_2_df(player.cards_in_hand)
+
+        # finding max cards to throw
+        df_face_counts = cards_df_to_face_counts_df(df_cards)
+        df_face_counts_max = df_face_counts[df_face_counts['total'] == df_face_counts['total'].max()]
+
+        cards_thrown = df_cards[df_cards['face'] == df_face_counts_max.index[0]].index.tolist()
+
+        self.cards_thrown += cards_thrown
+
+        player.cards_in_hand = df_cards.drop(cards_thrown).index.tolist()
 
     def pull_card(self, name):
         # currently only pulling from deck
