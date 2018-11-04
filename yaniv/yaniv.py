@@ -1,26 +1,17 @@
 import numpy as np
 import pandas as pd
 
+from scipy.stats import hypergeom
+from itertools import permutations
 
-class Player():
-    def __init__(self, name, throw_strategy='highest_card', yaniv_strategy='always'):
-        self.name = name
-
-        self.throw_strategy = throw_strategy
-        self.yaniv_strategy = yaniv_strategy
-        self.starts_round = False
-
-    def _hand_points(self):
-        # The value of points of current hand
-
-        self.hand_points = 0
-        for card in self.cards_in_hand:
-            self.hand_points += all_card2scores[card]
+MAX_ROUNDS = 400
+YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
 
-# start game:
-# * round 1
 
+
+
+# ========= card related functions =========
 
 def face_2_value(face):
     if face == 'A':
@@ -73,12 +64,39 @@ def cards_df_to_face_counts_df(df_cards):
 
     return df_face_counts
 
+def cards_2_values(cards):
+    values = []
+    for card in cards:
+        values.append(all_card2scores[card])
+
+    return values
 
 
 
 
-MAX_ROUNDS = 400
-YANIV_LIMIT = 7  # the value in which one can call Yaniv!
+
+# ============= auxillary functions
+def is_smaller_binary(value, thresh=None):
+    return int(value <= thresh)
+
+
+#========================================
+
+class Player():
+    def __init__(self, name, throw_strategy='highest_card', yaniv_strategy='always'):
+        self.name = name
+
+        self.throw_strategy = throw_strategy
+        self.yaniv_strategy = yaniv_strategy
+        self.starts_round = False
+
+    def _hand_points(self):
+        # The value of points of current hand
+
+        self.hand_points = 0
+        for card in self.cards_in_hand:
+            self.hand_points += all_card2scores[card]
+
 
 class Game():
     def __init__(self, player_names, max_score=200, assaf_penalty=30, jokers=True, verbose=1, seed=4):
@@ -133,6 +151,7 @@ class Game():
         return players
 
     def play_game(self):
+        card_num_2_max_value = self.card_number_2_max_card_value_to_declare_yaniv()
 
         round_number = 0
 
@@ -145,7 +164,7 @@ class Game():
             if self.verbose > 0:
                 print('Round: {:,}'.format(round_number))
 
-            self.round = Round(players, self.card2score, assaf_penalty=self.assaf_penalty, verbose=self.verbose, seed=self.seed)
+            self.round = Round(players, self.card2score, assaf_penalty=self.assaf_penalty, card_num_2_max_value=card_num_2_max_value, verbose=self.verbose, seed=self.seed)
             self.round.play()
 
             if self.seed:
@@ -178,13 +197,35 @@ class Game():
         else:
             print("Everybody loses ... ({} players left)".format(len(players)))
 
+    def card_number_2_max_card_value_to_declare_yaniv(self):
+        # Evaluating the most extereme values to obtain a Yaniv
+        # No assumption about state of deck made (assuming a full deck)
+
+        # making a function for future purposes
+        cardNum2maxValue = {}
+        cardNum2maxValue[
+            5] = 3  # this means: if player has 5 cards in hand, the max value card for yaniv is 3: 3, ace, ace, ace, ace
+        cardNum2maxValue[4] = 4  # 4, ace, ace, ace
+        cardNum2maxValue[3] = 5  # 5, ace, ace
+        cardNum2maxValue[2] = 6  # 6, ace
+        cardNum2maxValue[1] = 7  # this means: if player has 1 card in hand, the max value card for yaniv is 7: 7
+
+        if self.jokers:
+            cardNum2maxValue[5] = 5  # 5, joker, joker, ace, ace
+            cardNum2maxValue[4] = 6  # 6, joker, joker, ace
+            cardNum2maxValue[3] = 7  # 7, joker, joker
+            cardNum2maxValue[2] = 7  # 7, joker
+
+        return cardNum2maxValue
+
 
 class Round():
-    def __init__(self, players, card2score, assaf_penalty=30, seed=4, verbose=0):
+    def __init__(self, players, card2score, card_num_2_max_value=None, assaf_penalty=30, seed=4, verbose=0):
         self.seed = seed
         self.verbose = verbose
         self.assaf_penalty = assaf_penalty
         self.card2score = card2score
+        self.card_num_2_max_value = card_num_2_max_value
         self.cards_thrown = []
 
         self.players = players
@@ -267,7 +308,8 @@ class Round():
             self.play_round(player_order=player_order)
 
     def decide_declare_yaniv(self, name):
-        self._calculate_stats(name)
+        self.prob_lowest_hand(name)
+        #self._calculate_stats(name)
 
         player = self.players[name]
         if 'always' == player.yaniv_strategy:
@@ -360,7 +402,7 @@ class Round():
         player._hand_points()
         # print(name, player.cards_in_hand, player.hand_points)
 
-    def _calculate_stats(self, name):
+    def _calculate_stats___OLD(self, name):
         cards_player = list(self.players[name].cards_in_hand)
         cards_unknown =  list(set(self.card2score.keys()) - set(self.cards_thrown) )
         cards_unknown = list(set(cards_unknown) - set(cards_player) )
@@ -370,18 +412,99 @@ class Round():
             cards_unknown_values.append(self.card2score[card])
         cards_unknown_values = pd.Series(cards_unknown_values).value_counts().sort_index()
 
-        #print(cards_unknown_values)
         for name_other, player in self.players.items():
             if name_other != name:
                 n_cards_other = len(player.cards_in_hand)
                 if self.verbose > 1:
                     print("{} cards: {}".format(n_cards_other, name_other))
 
-    def prob_lowest_hand(self):
-        None
-        # count cards in others' hands
+    def name_2_cards_unknown(self, name):
+        cards_player = self.players[name].cards_in_hand
+        cards_unknown = list(set(self.card2score.keys()) - set(self.cards_thrown))
+        cards_unknown = list(set(cards_unknown) - set(cards_player))
+
+        return cards_unknown
+
+
+    def prob_lowest_hand(self, name):
+        hand_points = self.players[name].hand_points # michal
+
+        cards_unknown = self.name_2_cards_unknown(name)
+        cards_unknown_values = cards_2_values(cards_unknown)
+
+        prob_lowest = 1.
+        for name_other, player in self.players.items():
+            if name_other != name:
+                prob_better_than_other = self.calculate_prob_yaniv_better_than_other(hand_points, name_other, cards_unknown_values)
+
+                prob_lowest *= prob_better_than_other
 
         # probability lower than each individually (or as group ...?)
+        #print(cards_unknown)
+
+    def calculate_prob_yaniv_better_than_other(self, hand_points, name_other, cards_unknown_values):
+        n_cards_other = len(self.players[name_other].cards_in_hand) # number of cards of other player
+        thresh = self.card_num_2_max_value[n_cards_other] # maximum value other can have to declare yaniv
+
+        if self.verbose > 1:
+            print("Given {} has {} cards, the max threshold is {}".format(name_other, n_cards_other, thresh))
+
+        cards_unknown_smaller_than_thresh_bool = list(map(lambda x: is_smaller_binary(x, thresh=thresh), cards_unknown_values))
+
+        # Calculating the probability that all cards in other player's hand is smaller than the max thresh possible to Yaniv
+        prob_all_cards_under_thresh = self.calculate_prob_all_cards_under_thresh(n_cards_other, cards_unknown_smaller_than_thresh_bool)
+
+        # Given all cards are under the thresh -- what is the probability of NOT Assafing the Yaniv declaration?
+
+        cards_unknown_values_small = []
+        for card in cards_unknown_values:
+            if card <= thresh:
+                cards_unknown_values_small.append(card)
+
+
+        prob_above_yaniv_given_all_below_threshold = self.calculate_prob_above_yaniv_given_all_below_thresh(hand_points, cards_unknown_values_small, n_cards_other)
+
+        prob_yaniv_better_than_other = (1 - prob_all_cards_under_thresh) + prob_above_yaniv_given_all_below_threshold * prob_all_cards_under_thresh
+
+        if self.verbose > 1:
+            print("p({} cards sum > yaniv| all {} cards <= {} )=%{:0.1f}".format(name_other, name_other, thresh,
+                                                                                 100. * prob_above_yaniv_given_all_below_threshold))
+            print(
+                "Meaning the probability of Successful Yaniv (=NOT being Assafed by {}) is: %{:0.2f}".format(name_other,
+                                                                                                             prob_yaniv_better_than_other * 100.))
+
+        return prob_yaniv_better_than_other
+
+    def calculate_prob_all_cards_under_thresh(self, n_cards, smaller_than_thresh_bool):
+        n = n_cards  # of n cards in player's hand
+        k = n  # we want to verify that all k=n are lower than the thresh
+
+        N = len(smaller_than_thresh_bool)  # from a pool of total N cards
+        K = sum(smaller_than_thresh_bool)  # where K of them are known to be less than thresh
+
+        prob_all_cards_under_thresh = hypergeom.pmf(k, N, K, n)
+
+        if self.verbose > 1:
+            print("Of a total of N={} unknown cards K={} card are below or equal to thresh".format(N, K))
+            print("The probability that all k={} of n={} cards are below thresh is: %{:0.1f}".format(k, n, prob_all_cards_under_thresh * 100.))
+
+        return prob_all_cards_under_thresh
+
+    def calculate_prob_above_yaniv_given_all_below_thresh(self, hand_points, card_values, n_cards):
+
+        l_permutation_sums = []
+        other_above_yaniv_counter = 0
+
+        for permutation in permutations(card_values, n_cards):
+            sum_ = sum(permutation)
+            l_permutation_sums.append(sum_)
+
+            if sum_ > hand_points: #> self.yaniv_points:
+                other_above_yaniv_counter += 1
+
+        prob_above_yaniv_given_below_threshold = other_above_yaniv_counter * 1. / len(l_permutation_sums)
+
+        return prob_above_yaniv_given_below_threshold
 
 
 
