@@ -24,3 +24,6 @@ game.play()
 ```
 
 To see stats, set `verbose=2`.
+
+# Requirements 
+python 3
