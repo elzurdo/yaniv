@@ -380,10 +380,6 @@ class Round():
                 chosen_card = np.random.choice(list(self.round_deck.keys()), size=1, replace=False)
                 #print('deck pile: {}, instead of {}'.format(chosen_card, sr_cards_to_choose_from.min()))
 
-            if self.verbose > 1:
-                print(self.cards_to_choose_from)
-                print(chosen_card)
-
             if from_deck:
                 del self.round_deck[chosen_card[0]]
             player.cards_in_hand = np.append(player.cards_in_hand, chosen_card)
@@ -431,6 +427,12 @@ class Round():
 
                 prob_lowest *= prob_better_than_other
 
+
+        if self.verbose > 1:
+            if len(self.players) > 2:
+                print('~' * 10)
+                print("The probability for {} to call a successful Yaniv call is: {:0.1f}%".format(name, 100. * prob_lowest))
+
         # probability lower than each individually (or as group ...?)
         #print(cards_unknown)
 
@@ -439,6 +441,7 @@ class Round():
         thresh = self.card_num_2_max_value[n_cards_other] # maximum value other can have to declare yaniv
 
         if self.verbose > 1:
+            print('~' * 10)
             print("Given {} has {} cards, the max threshold is {}".format(name_other, n_cards_other, thresh))
 
         cards_unknown_smaller_than_thresh_bool = list(map(lambda x: is_smaller_binary(x, thresh=thresh), cards_unknown_values))
