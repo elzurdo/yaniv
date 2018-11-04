@@ -7,10 +7,6 @@ from itertools import permutations
 MAX_ROUNDS = 400
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
-
-
-
-
 # ========= card related functions =========
 
 def face_2_value(face):
@@ -70,9 +66,6 @@ def cards_2_values(cards):
         values.append(all_card2scores[card])
 
     return values
-
-
-
 
 
 # ============= auxillary functions
@@ -308,7 +301,8 @@ class Round():
             self.play_round(player_order=player_order)
 
     def decide_declare_yaniv(self, name):
-        self.prob_lowest_hand(name)
+        if self. verbose > 1:
+            self.prob_lowest_hand(name)
         #self._calculate_stats(name)
 
         player = self.players[name]
@@ -346,30 +340,6 @@ class Round():
             self.players[name_yaniv].hand_points = 0  # Yaniv player does not get points
             yaniv_player.starts_round = True
 
-    def throw_card_old(self, name):
-        player = self.players[name]
-        # self.throw_strategy = 'highest_card'
-        # print(player.throw_strategy, player.cards_in_hand)
-
-        if 'highest_card' == player.throw_strategy:
-            cards_in_hand = {}
-            for card in player.cards_in_hand:
-                cards_in_hand[card] = self.card2score[card]
-
-            # ========= temp script: figure out how to do this without pandas (find card with highest value)
-            import pandas as pd
-            cards_thrown = pd.Series(cards_in_hand).sort_values().tail(1).index[0]
-
-            if not isinstance((cards_thrown), list):
-                cards_thrown = [cards_thrown]
-
-            # print(pd.Series(cards_in_hand[card])) #.sort_values().tail(1))
-            self.cards_thrown += cards_thrown
-            for card_thrown in cards_thrown:
-                del cards_in_hand[card_thrown]
-
-            player.cards_in_hand = list(cards_in_hand)
-
     def throw_card(self, name):
         player = self.players[name]
 
@@ -381,19 +351,41 @@ class Round():
 
         cards_thrown = df_cards[df_cards['face'] == df_face_counts_max.index[0]].index.tolist()
 
+
         self.cards_thrown += cards_thrown
 
-        player.cards_in_hand = df_cards.drop(cards_thrown).index.tolist()
+        self.cards_to_choose_from = cards_thrown
+
+        player.df_cards = df_cards.drop(cards_thrown)
+        # TODO: use only df_cards and depricate cards_in_hand
+        player.cards_in_hand = player.df_cards.index.tolist()
+
 
     def pull_card(self, name):
+        highest_value_to_choose = 3
         # currently only pulling from deck
         player = self.players[name]
 
         if len(self.round_deck) > 0:
             self._seeding()
-            chosen_card = np.random.choice(list(self.round_deck.keys()), size=1, replace=False)
 
-            del self.round_deck[chosen_card[0]]
+            sr_cards_to_choose_from = pd.Series(list(map(lambda x: all_card2scores[x], self.cards_to_choose_from)), self.cards_to_choose_from)
+
+            from_deck = True
+            if sr_cards_to_choose_from.min() <= highest_value_to_choose: # pikcing up fro throw pile
+                chosen_card = [sr_cards_to_choose_from.sort_values().index[0]]
+                from_deck = False
+                #print('throw pile: {}'.format(chosen_card))
+            else: # picking up from deck
+                chosen_card = np.random.choice(list(self.round_deck.keys()), size=1, replace=False)
+                #print('deck pile: {}, instead of {}'.format(chosen_card, sr_cards_to_choose_from.min()))
+
+            if self.verbose > 1:
+                print(self.cards_to_choose_from)
+                print(chosen_card)
+
+            if from_deck:
+                del self.round_deck[chosen_card[0]]
             player.cards_in_hand = np.append(player.cards_in_hand, chosen_card)
         else:
             if self.verbose > 1:
