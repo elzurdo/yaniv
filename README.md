@@ -19,11 +19,72 @@ To run a game:
 ```python3
 import yaniv
 
-game = yaniv.Game(['john','paul', 'ringo','george'], seed=1, verbose=0)
+players = ['John','Paul', 'Ringo','George']
+
+verbose = 2
+game = yaniv.Game(players, seed=1, verbose=verbose)
 game.play()
 ```
 
-To see stats, set `verbose=2`.
+This will yield the game results, round for round with a mention of the Yaniv success statistics, e.g:
+
+```
+Players:
+John
+Paul
+Ringo
+George
+====================
+Round: 1
+Player starting the round: John
+~~~~~~~~~~
+The probability for Paul to make a successful Yaniv decleration is: 59.5%
+~~~~~~~~~~
+Round Conclusion
+Paul declared Yaniv with 7
+John 12 ['cA' 'dA' 'cJ'] 12
+Paul 0 ['c2' 'c3' 'd2'] 0
+Ringo 10 ['s2' 'sA' 'hA' 'c6'] 10
+George 12 ['h2' 'joker2' 'joker1' 'sJ'] 12
+====================
+Round: 2
+Player starting the round: Paul
+~~~~~~~~~~
+The probability for Paul to make a successful Yaniv decleration is: 76.0%
+~~~~~~~~~~
+Round Conclusion
+Paul declared Yaniv with 7
+John 15 ['s4' 'dA' 'hQ'] 27
+Paul 0 ['c2' 'h3' 'h2'] 0
+Ringo 10 ['joker2' 'd2' 'cA' 'hA' 'h6'] 20
+George 13 ['sA' 'h4' 'c5' 'joker1' 's3'] 25
+
+.
+.
+.
+
+Round: 23
+Player starting the round: George
+~~~~~~~~~~
+Round Conclusion
+George declared Yaniv with 6
+John 20 ['c6' 'h4' 'hK'] 215
+George 0 ['d3' 'hA' 'h2'] 194
+John 215 OUT
+--------------------
+The winner is: George with 194 points
+
+```
+
+For more or less information change verbose, where `verbose=0` is minimal information and `verbose=3` is maximum.
 
 # Requirements 
 python 3
+
+* numpy 
+* scipy  
+* pandas
+
+
+# Credits 
+Image credit: Barak Edry from his excellent [App Store game of Yaniv](https://itunes.apple.com/gb/app/yaniv/id397614908?mt=8)
