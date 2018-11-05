@@ -112,6 +112,7 @@ class Game():
     def _players(self, player_names):
 
         self.all_players = []
+        print('Players:')
 
         for name in player_names:
             self.all_players.append(Player(name))
@@ -133,11 +134,11 @@ class Game():
 
                 if player.score < self.max_score:
                     players[player.name] = player
-                    if self.verbose > 1:
+                    if self.verbose >= 3:
                         print(player.name, player.score, 'IN')
                 else:
                     player.in_play = False
-                    if self.verbose > 0:
+                    if self.verbose >= 2:
                         print(player.name, player.score, 'OUT')
                         print('-' * 20)
 
@@ -154,7 +155,7 @@ class Game():
             if self.verbose:
                 print('=' * 20)
             round_number += 1
-            if self.verbose > 0:
+            if self.verbose >= 1:
                 print('Round: {:,}'.format(round_number))
 
             self.round = Round(players, self.card2score, assaf_penalty=self.assaf_penalty, card_num_2_max_value=card_num_2_max_value, verbose=self.verbose, seed=self.seed)
@@ -162,15 +163,15 @@ class Game():
 
             if self.seed:
                 self.seed += 1
-            # ====== DELETE/COMMENT-OUT: TEST PURPOSES ======
+            # ====== score updating ==============
             for name, player in players.items():
                 player.score += player.hand_points
 
                 if player.score == 100:
                     player.score = 50
-                    print("{} has exactly 100, down to 50".format(name))
+                    print("Lucky {}! Aggregated 100 points reduced to 50".format(name))
                 elif player.score == 200:
-                    print("{} has exactly 200, down to 150".format(name))
+                    print("Lucky {}! Aggregated 200 points reduced to 150".format(name))
                     player.score = 150
 
                 if self.verbose:
@@ -251,7 +252,7 @@ class Round():
                 starting_player = name
 
         if self.verbose:
-            print('Starting player: {}'.format(starting_player))
+            print('Player starting the round: {}'.format(starting_player))
 
         l_current_player_names = list(self.players.keys())
         sr_current_player_names = pd.Series(l_current_player_names)
@@ -315,6 +316,8 @@ class Round():
         self.yaniv_points = int(yaniv_player.hand_points)
 
         if self.verbose:
+            print('~' * 10)
+            print('Round Conclusion')
             print('{} declared Yaniv with {}'.format(name_yaniv, yaniv_player.hand_points))
 
         assafers = []
@@ -332,7 +335,7 @@ class Round():
             assafer_name = assafers[0]
             if self.verbose:
                 print('ASSAF!')
-                print('by: {} (hand of {})'.format(assafers[0], self.players[assafer_name].hand_points))
+                print('{} Assafed by: {} (hand of {})'.format(name_yaniv, assafers[0], self.players[assafer_name].hand_points))
 
             self.players[name_yaniv].hand_points += self.assaf_penalty
             self.players[assafer_name].starts_round = True
@@ -384,7 +387,7 @@ class Round():
                 del self.round_deck[chosen_card[0]]
             player.cards_in_hand = np.append(player.cards_in_hand, chosen_card)
         else:
-            if self.verbose > 1:
+            if self.verbose >= 2:
                 print("Deck is empty")
 
         player._hand_points()
@@ -403,7 +406,7 @@ class Round():
         for name_other, player in self.players.items():
             if name_other != name:
                 n_cards_other = len(player.cards_in_hand)
-                if self.verbose > 1:
+                if self.verbose >= 2:
                     print("{} cards: {}".format(n_cards_other, name_other))
 
     def name_2_cards_unknown(self, name):
@@ -428,10 +431,10 @@ class Round():
                 prob_lowest *= prob_better_than_other
 
 
-        if self.verbose > 1:
+        if self.verbose >= 2:
             if len(self.players) > 2:
                 print('~' * 10)
-                print("The probability for {} to call a successful Yaniv call is: {:0.1f}%".format(name, 100. * prob_lowest))
+                print("The probability for {} to make a successful Yaniv decleration is: {:0.1f}%".format(name, 100. * prob_lowest))
 
         # probability lower than each individually (or as group ...?)
         #print(cards_unknown)
@@ -440,9 +443,9 @@ class Round():
         n_cards_other = len(self.players[name_other].cards_in_hand) # number of cards of other player
         thresh = self.card_num_2_max_value[n_cards_other] # maximum value other can have to declare yaniv
 
-        if self.verbose > 1:
+        if self.verbose >= 3:
             print('~' * 10)
-            print("Given {} has {} cards, the max threshold is {}".format(name_other, n_cards_other, thresh))
+            print("Given {} has {} cards, the max threshold is {} (i.e, if has above this value, no chance to Assaf)".format(name_other, n_cards_other, thresh))
 
         cards_unknown_smaller_than_thresh_bool = list(map(lambda x: is_smaller_binary(x, thresh=thresh), cards_unknown_values))
 
@@ -461,7 +464,7 @@ class Round():
 
         prob_yaniv_better_than_other = (1 - prob_all_cards_under_thresh) + prob_above_yaniv_given_all_below_threshold * prob_all_cards_under_thresh
 
-        if self.verbose > 1:
+        if self.verbose >= 3:
             print("p({} cards sum > yaniv| all {} cards <= {} )=%{:0.1f}".format(name_other, name_other, thresh,
                                                                                  100. * prob_above_yaniv_given_all_below_threshold))
             print(
@@ -479,7 +482,7 @@ class Round():
 
         prob_all_cards_under_thresh = hypergeom.pmf(k, N, K, n)
 
-        if self.verbose > 1:
+        if self.verbose >= 3:
             print("Of a total of N={} unknown cards K={} card are below or equal to thresh".format(N, K))
             print("The probability that all k={} of n={} cards are below thresh is: %{:0.1f}".format(k, n, prob_all_cards_under_thresh * 100.))
 
