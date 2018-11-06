@@ -5,7 +5,7 @@ from scipy.stats import hypergeom
 from itertools import permutations
 
 MAX_ROUNDS = 400
-YANIV_LIMIT = 7  # the value in which one can call Yaniv!
+YANIV_LIMIT = 30  # the value in which one can call Yaniv!
 
 # ========= card related functions =========
 
@@ -14,7 +14,7 @@ def face_2_value(face):
         return 1
     elif face in ['J', 'Q', 'K']:
         return 10
-    elif 'oker' in face:
+    elif 'oker' in face: # purposely 'oker' and not 'joker'
         return 0
     else:
         return int(face)
@@ -26,7 +26,7 @@ def card_2_face(card):
     return card[1:]
 
 def deck(jokers=True):
-    suits = ['d', 'h', 'c', 's']  # diamonds, clubs, hearts, spades
+    suits = ['d', 'h', 'c', 's']  # diamonds, hearts, clubs, spades
 
     values = list(range(1, 11)) + [10, 10, 10]
     names = ['A'] + list(map(str, range(2, 11))) + ['J', 'Q', 'K']  # Ace, 2-10, Jack, Queen, King
