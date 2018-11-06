@@ -5,7 +5,7 @@ from scipy.stats import hypergeom
 from itertools import permutations
 
 MAX_ROUNDS = 400
-YANIV_LIMIT = 30  # the value in which one can call Yaniv!
+YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
 # ========= card related functions =========
 
