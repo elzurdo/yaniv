@@ -288,12 +288,12 @@ class Round():
             player_order = self._player_order()
 
         for name, player in player_order.items():  # self.players.items():
-            # print(name, player.starts_round)
             if not yaniv_declared:
                 if player.hand_points <= YANIV_LIMIT:
                     yaniv_declared = self.decide_declare_yaniv(name)
                 if yaniv_declared:
                     self.round_summary(name)
+                    return None # End of round
                 else:
                     self.throw_card(name)
                     self.pull_card(name)
@@ -304,7 +304,6 @@ class Round():
     def decide_declare_yaniv(self, name):
         if self. verbose > 1:
             self.prob_lowest_hand(name)
-        #self._calculate_stats(name)
 
         player = self.players[name]
         if 'always' == player.yaniv_strategy:
