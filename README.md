@@ -66,6 +66,8 @@ George 13 ['sA' 'h4' 'c5' 'joker1' 's3'] 25
 Round: 23
 Player starting the round: George
 ~~~~~~~~~~
+The probability for George to make a successful Yaniv decleration is: 98.5%
+~~~~~~~~~~
 Round Conclusion
 George declared Yaniv with 6
 John 20 ['c6' 'h4' 'hK'] 215
