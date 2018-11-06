@@ -429,14 +429,9 @@ class Round():
 
                 prob_lowest *= prob_better_than_other
 
-
         if self.verbose >= 2:
-            if len(self.players) > 2:
-                print('~' * 10)
-                print("The probability for {} to make a successful Yaniv decleration is: {:0.1f}%".format(name, 100. * prob_lowest))
-
-        # probability lower than each individually (or as group ...?)
-        #print(cards_unknown)
+            print('~' * 10)
+            print("The probability for {} to make a successful Yaniv decleration is: {:0.1f}%".format(name, 100. * prob_lowest))
 
     def calculate_prob_yaniv_better_than_other(self, hand_points, name_other, cards_unknown_values):
         n_cards_other = len(self.players[name_other].cards_in_hand) # number of cards of other player
