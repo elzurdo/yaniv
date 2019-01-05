@@ -44,20 +44,26 @@ def deck(jokers=True):
     :return: dict. keys are the sting of the card and the values are the card points
     '''
     suits = ['d', 'h', 'c', 's']  # diamonds, hearts, clubs, spades
+    faces = ['A'] + list(map(str, range(2, 11))) + ['J', 'Q', 'K']  # Ace, 2-10, Jack, Queen, King
 
-    values = list(range(1, 11)) + [10, 10, 10]
-    names = ['A'] + list(map(str, range(2, 11))) + ['J', 'Q', 'K']  # Ace, 2-10, Jack, Queen, King
+    points = list(range(1, 11)) + [10, 10, 10] # notice! J, Q, K all give 10 points
+    card_to_score = {"{}{}".format(suit, face):
+                         points[iface] for iface, face in enumerate(faces) for suit in suits}
 
-    card_to_score = {"{}{}".format(suit, name):
-                      values[iname] for iname, name in enumerate(names) for suit in suits}
+    values = list(range(1, 11)) + [11, 12, 13] # notice! J, Q, K are valued at 11, 12, 13, respectively
+    card_to_streak_value = {"{}{}".format(suit, face):
+                                values[iface] for iface, face in enumerate(faces) for suit in suits}
 
     if jokers:
         card_to_score['joker1'] = 0
         card_to_score['joker2'] = 0
 
-    return card_to_score
+        card_to_streak_value['joker1'] = 0
+        card_to_streak_value['joker2'] = 0
 
-card_to_score_all = deck(jokers=True)
+    return card_to_score, card_to_streak_value
+
+card_to_score_all, card_to_streak_value_all = deck(jokers=True)
 
 def cards_to_df(cards):
     df_cards = pd.DataFrame({'face': list(map(card_to_face, cards)),
@@ -126,7 +132,7 @@ class Game():
         self.verbose = verbose
 
         self._players(player_names)
-        self.card2score = deck(jokers=jokers)
+        self.card_to_score, self.card_to_streak_value = deck(jokers=jokers)
 
     def play(self):
         self.initiate_players_status()
@@ -211,7 +217,7 @@ class Game():
 
             # Declaring Round object and playing a round
             # TODO: make card_num_2_max_value dyanmic
-            self.round = Round(players, self.card2score, assaf_penalty=self.assaf_penalty,
+            self.round = Round(players, self.card_to_score, assaf_penalty=self.assaf_penalty,
                                card_num_2_max_value=card_num_2_max_value, verbose=self.verbose, seed=self.seed)
             self.round.play()
 
@@ -299,11 +305,11 @@ class Game():
 
 
 class Round():
-    def __init__(self, players, card2score, card_num_2_max_value=None, assaf_penalty=30, seed=4, verbose=0):
+    def __init__(self, players, card_to_score, card_num_2_max_value=None, assaf_penalty=30, seed=4, verbose=0):
         self.seed = seed
         self.verbose = verbose
         self.assaf_penalty = assaf_penalty
-        self.card2score = card2score
+        self.card_to_score = card_to_score
         self.card_num_2_max_value = card_num_2_max_value
         self.cards_thrown = []
 
@@ -311,7 +317,7 @@ class Round():
 
     def play(self):
         # round starts with a full deck
-        self.round_deck = dict(self.card2score)
+        self.round_deck = dict(self.card_to_score)
 
         self.distribute_cards()
 
@@ -524,12 +530,12 @@ class Round():
 
     def _calculate_stats___OLD(self, name):
         cards_player = list(self.players[name].cards_in_hand)
-        cards_unknown =  list(set(self.card2score.keys()) - set(self.cards_thrown) )
+        cards_unknown =  list(set(self.card_to_score.keys()) - set(self.cards_thrown))
         cards_unknown = list(set(cards_unknown) - set(cards_player) )
 
         cards_unknown_values =  []
         for card in cards_unknown:
-            cards_unknown_values.append(self.card2score[card])
+            cards_unknown_values.append(self.card_to_score[card])
         cards_unknown_values = pd.Series(cards_unknown_values).value_counts().sort_index()
 
         for name_other, player in self.players.items():
@@ -540,7 +546,7 @@ class Round():
 
     def name_2_cards_unknown(self, name):
         cards_player = self.players[name].cards_in_hand
-        cards_unknown = list(set(self.card2score.keys()) - set(self.cards_thrown))
+        cards_unknown = list(set(self.card_to_score.keys()) - set(self.cards_thrown))
         cards_unknown = list(set(cards_unknown) - set(cards_player))
 
         return cards_unknown
