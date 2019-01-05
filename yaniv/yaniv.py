@@ -48,21 +48,21 @@ def deck(jokers=True):
     values = list(range(1, 11)) + [10, 10, 10]
     names = ['A'] + list(map(str, range(2, 11))) + ['J', 'Q', 'K']  # Ace, 2-10, Jack, Queen, King
 
-    card2score = {"{}{}".format(suit, name):
+    card_to_score = {"{}{}".format(suit, name):
                       values[iname] for iname, name in enumerate(names) for suit in suits}
 
     if jokers:
-        card2score['joker1'] = 0
-        card2score['joker2'] = 0
+        card_to_score['joker1'] = 0
+        card_to_score['joker2'] = 0
 
-    return card2score
+    return card_to_score
 
-all_card2scores = deck(jokers=True)
+card_to_score_all = deck(jokers=True)
 
 def cards_to_df(cards):
     df_cards = pd.DataFrame({'face': list(map(card_to_face, cards)),
                              'suit':  list(map(card_to_suite, cards)),
-                             'value': list(map(lambda x: all_card2scores[x], cards))
+                             'value': list(map(lambda x: card_to_score_all[x], cards))
                              },
                             index=cards)
 
@@ -79,7 +79,7 @@ def cards_df_to_face_counts_df(df_cards):
 def cards_to_values(cards):
     values = []
     for card in cards:
-        values.append(all_card2scores[card])
+        values.append(card_to_score_all[card])
 
     return values
 
@@ -105,7 +105,7 @@ class Player():
 
         self.hand_points = 0
         for card in self.cards_in_hand:
-            self.hand_points += all_card2scores[card]
+            self.hand_points += card_to_score_all[card]
 
 
 class Game():
@@ -501,7 +501,7 @@ class Round():
         if len(self.round_deck) > 0:
             self._seeding()
 
-            sr_cards_to_choose_from = pd.Series(list(map(lambda x: all_card2scores[x], self.cards_to_choose_from)), self.cards_to_choose_from)
+            sr_cards_to_choose_from = pd.Series(list(map(lambda x: card_to_score_all[x], self.cards_to_choose_from)), self.cards_to_choose_from)
 
             from_deck = True
             if sr_cards_to_choose_from.min() <= highest_value_to_choose: # pikcing up fro throw pile
