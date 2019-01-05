@@ -58,8 +58,8 @@ def deck(jokers=True):
         card_to_score['joker1'] = 0
         card_to_score['joker2'] = 0
 
-        card_to_streak_value['joker1'] = 0
-        card_to_streak_value['joker2'] = 0
+        card_to_streak_value['joker1'] = -1 # better option than 0, because do not want to relate to A (1)
+        card_to_streak_value['joker2'] = -1
 
     return card_to_score, card_to_streak_value
 
@@ -88,6 +88,86 @@ def cards_to_values(cards):
         values.append(card_to_score_all[card])
 
     return values
+
+
+def cards_to_relevant_to_test_streak(initial_cards):
+    '''Returns subset list of cards that might be relevant for streak
+
+    We find cards in the dominant suite in hand and pass any available jokers.
+    '''
+    df = pd.DataFrame(index=initial_cards)
+
+    df['score'] = df.index.map(lambda x: card_to_score_all[x])
+    df['face'] = df.index.map(card_to_face)
+    df['suite'] = df.index.map(card_to_suite)
+    sr_suite_count = df.groupby("suite").size()
+
+    min_suite_required_for_streak = 3
+    # for every joker in hand the minimum required is lower
+    # so one would naively do:
+    # min_suite_required_for_streak -= sr_suite_count['j']
+    # but since using one known card and two jokers does not make sense
+    # the thresh should be 2
+    if 'j' in sr_suite_count.index:
+        min_suite_required_for_streak = 2
+
+    if sr_suite_count.max() >= min_suite_required_for_streak:
+        suite = sr_suite_count[sr_suite_count == sr_suite_count.max()].index[0]
+        # jokers are also relevant
+        cards = df[df['suite'].isin([suite, 'j'])].index.tolist()
+    else:
+        cards = None
+
+    return cards
+
+#TODO: case of jokers
+def find_straight_set(initial_cards):
+    '''Returning a set of 3 or more in the cards
+
+    Can only have one set streak (since the maximum cards in hand is 5)
+
+    The basis here is fairly simple:
+    (1) cards_to_relevant_to_test_streak limits the initial_cards to cards of the same suit with maximum count
+    (2) building a series by going through a sorted list of cars in the same suite
+
+
+    Jokers not dealt with yet because is non trivial:
+    (1) Perhaps more useful to use in less dominant suit
+    (2) Need to look across at least two other cards
+    (3) Jokers are best to put in the middle where one cannot draw, not on the sides.
+    '''
+    cards = cards_to_relevant_to_test_streak(initial_cards)
+
+    if not cards:
+        return None
+    #
+    sr_ = pd.Series(list(map(lambda x: card_to_streak_value_all[x], cards)), index=cards).sort_values()
+
+    result = None
+    if len(sr_) >= 3:
+        idx_previous = sr_.index[0]
+
+        series = [idx_previous]
+        for i, idx in enumerate(sr_.index[1:]):
+            diff = sr_[idx] - sr_[idx_previous]
+            if diff == 1:  # this assumes one deck! if more than one deck need to reexamine
+                # adding to series
+                series.append(idx)
+
+                if len(series) >= 3:
+                    # registering series into result
+                    result = list(series)
+            else:
+                if len(series) >= 3:
+                    # registering series into result
+                    result = list(series)
+
+                # starting new series
+                series = [idx]
+
+            idx_previous = idx
+
+    return result
 
 
 # ============= auxillary functions
@@ -478,16 +558,108 @@ class Round():
             # ... and gets to start the next round.
             yaniv_player.starts_round = True
 
+    def cards_to_relevant_to_test_streak(initial_cards):
+        '''Returns subset list of cards that might be relevant for streak
+
+        We find cards in the dominant suite in hand and pass any available jokers.
+        '''
+        df = pd.DataFrame(index=initial_cards)
+
+        df['score'] = df.index.map(lambda x: yaniv.card_to_score_all[x])
+        df['face'] = df.index.map(yaniv.card_to_face)
+        df['suite'] = df.index.map(yaniv.card_to_suite)
+        sr_suite_count = df.groupby("suite").size()
+
+        min_suite_required_for_streak = 3
+        # for every joker in hand the minimum required is lower
+        # so one would naively do:
+        # min_suite_required_for_streak -= sr_suite_count['j']
+        # but since using one known card and two jokers does not make sense
+        # the thresh should be 2
+        if 'j' in sr_suite_count.index:
+            min_suite_required_for_streak = 2
+
+        if sr_suite_count.max() >= min_suite_required_for_streak:
+            suite = sr_suite_count[sr_suite_count == sr_suite_count.max()].index[0]
+            # jokers are also relevant
+            cards = df[df['suite'].isin([suite, 'j'])].index.tolist()
+        else:
+            cards = None
+
+        return cards
+
+    def find_straight_set(initial_cards):
+        '''Returning a set of 3 or more in the cards
+
+        Can only have one (since the maximum cards in hand is 5)
+        '''
+        cards = cards_to_relevant_to_test_streak(initial_cards)
+
+        if not cards:
+            return None
+        #
+        sr_ = pd.Series(list(map(lambda x: yaniv.card_to_streak_value_all[x], cards)), index=cards).sort_values()
+
+        print(sr_)
+        result = None
+        if len(sr_) >= 3:
+            idx_previous = sr_.index[0]
+
+            series = [idx_previous]
+            for i, idx in enumerate(sr_.index[1:]):
+                diff = sr_[idx] - sr_[idx_previous]
+                if diff == 1:  # this assumes one deck! if more than one deck need to reexamine
+                    # adding to series
+                    series.append(idx)
+
+                    if len(series) >= 3:
+                        # registering series into result
+                        result = list(series)
+                else:
+                    if len(series) >= 3:
+                        # registering series into result
+                        result = list(series)
+
+                    # starting new series
+                    series = [idx]
+
+                idx_previous = idx
+
+        return result
+
     def throw_card(self, name):
+        '''name throws out card(s)
+        Needs to figure out between Same Face (default) or Streak.
+
+        :param name:
+        :return:
+        '''
         player = self.players[name]
 
         df_cards = cards_to_df(player.cards_in_hand)
 
-        # finding max cards to throw
+        # ======= Same Face Option =========
         df_face_counts = cards_df_to_face_counts_df(df_cards)
         df_face_counts_max = df_face_counts[df_face_counts['total'] == df_face_counts['total'].max()]
 
-        cards_thrown = df_cards[df_cards['face'] == df_face_counts_max.index[0]].index.tolist()
+        df_cards_same_face = df_cards[df_cards['face'] == df_face_counts_max.index[0]]
+        points_same_face = df_cards_same_face['value'].sum()
+
+        # ======== Streak Option ============
+        points_streak = 0 # initial setting
+
+        cards_in_streak = find_straight_set(player.cards_in_hand)
+        if cards_in_streak:
+            points_streak = df_cards.loc[cards_in_streak, 'value'].sum()
+
+        if points_streak >= points_same_face:
+            if self.verbose >= 1:
+                print("{} throwing streak {}, {}>={}, {}".format(name, cards_in_streak, points_streak, points_same_face,
+                                                          list(set(df_cards.index) - set(cards_in_streak)) )
+                                                          )
+            cards_thrown = cards_in_streak
+        else:
+            cards_thrown = df_cards_same_face.index.tolist()
 
 
         self.cards_thrown += cards_thrown
