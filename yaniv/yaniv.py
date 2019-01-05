@@ -9,20 +9,32 @@ YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
 # ========= card related functions =========
 
-def face_2_value(face):
+def face_to_value(face):
     if face == 'A':
         return 1
     elif face in ['J', 'Q', 'K']:
         return 10
-    elif 'oker' in face: # purposely 'oker' and not 'joker'
+    elif 'oker' in face: # purposely 'oker1', 'okder2', and not 'joker'
         return 0
     else:
         return int(face)
 
 
-def card_2_suite(card):
+def card_to_suite(card):
+    '''Returns suite of card
+    :param card: str
+    :return: str. possible values 's' (Spades), 'd' (Diamonds), 'h' (Hearts), 'c' (Clubs) and 'j' (Jokers)
+    '''
     return card[0]
-def card_2_face(card):
+def card_to_face(card):
+    '''Returns the face of the card in str
+
+    Note that possible values are 'A', '2', '3', ... '10', 'J', 'Q', 'K'
+    and for jokers: 'oker1' or 'oker2'
+
+    :param card: str.
+    :return: str.
+    '''
     return card[1:]
 
 def deck(jokers=True):
@@ -47,25 +59,24 @@ def deck(jokers=True):
 
 all_card2scores = deck(jokers=True)
 
-def cards_2_df(cards):
-    #cards = game.round.players['michal'].cards_in_hand
-    df_cards = pd.DataFrame({'face': list(map(card_2_face, cards)),
-                  'suit':  list(map(card_2_suite, cards)),
-                  'value': list(map(lambda x: all_card2scores[x], cards))
-                 },
-                 index=cards)
+def cards_to_df(cards):
+    df_cards = pd.DataFrame({'face': list(map(card_to_face, cards)),
+                             'suit':  list(map(card_to_suite, cards)),
+                             'value': list(map(lambda x: all_card2scores[x], cards))
+                             },
+                            index=cards)
 
     return df_cards
 
 def cards_df_to_face_counts_df(df_cards):
     df_face_counts = pd.DataFrame(df_cards['face'].value_counts()).rename(columns={'face': 'counts'})
     df_face_counts.index.name = 'face'
-    df_face_counts['value'] = df_face_counts.index.map(face_2_value)
+    df_face_counts['value'] = df_face_counts.index.map(face_to_value)
     df_face_counts['total'] = df_face_counts['counts'] * df_face_counts['value']
 
     return df_face_counts
 
-def cards_2_values(cards):
+def cards_to_values(cards):
     values = []
     for card in cards:
         values.append(all_card2scores[card])
@@ -322,7 +333,6 @@ class Round():
 
         :return:
         '''
-        import pandas as pd
         starting_player = None
         for name, player in self.players.items():
             if player.starts_round == True:
@@ -465,7 +475,7 @@ class Round():
     def throw_card(self, name):
         player = self.players[name]
 
-        df_cards = cards_2_df(player.cards_in_hand)
+        df_cards = cards_to_df(player.cards_in_hand)
 
         # finding max cards to throw
         df_face_counts = cards_df_to_face_counts_df(df_cards)
@@ -540,7 +550,7 @@ class Round():
         hand_points = self.players[name].hand_points # michal
 
         cards_unknown = self.name_2_cards_unknown(name)
-        cards_unknown_values = cards_2_values(cards_unknown)
+        cards_unknown_values = cards_to_values(cards_unknown)
 
         prob_lowest = 1.
         for name_other, player in self.players.items():
