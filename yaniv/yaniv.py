@@ -89,7 +89,8 @@ class Player():
         self.starts_round = False
 
     def _hand_points(self):
-        # The value of points of current hand
+        '''Calculates the sum of point in a hand
+        '''
 
         self.hand_points = 0
         for card in self.cards_in_hand:
@@ -151,6 +152,12 @@ class Game():
                 player.starts_round = True
 
     def _round_players(self):
+        '''Returns a dictionary of Player objects only of players that have less the max_score.
+
+        This is used to track which players advance to the next round
+
+        :return: dict. keys are player names (str) and values are the corresponding Player objects
+        '''
         players = {}
 
         for player in self.all_players:
@@ -174,10 +181,14 @@ class Game():
         :return:
         '''
 
+        # card_num_2_max_value is a mapping from the number of cards in hand to the maximum value of single card in hand
+        # that can result in a successful Yaniv. This is useful to calculate heuristics of Yaniv success probabilities.
         card_num_2_max_value = self.card_number_to_max_card_value_to_declare_yaniv()
 
-        round_number = 0 # first round number is 0
+        # round number counter. The first round is value 1, so setting counter to 0.
+        round_number = 0
 
+        # players is a dictionary of players that progress to the next round (they have less than max_score)
         players = self._round_players()
 
         while len(players) > 1: # the game terminates when left with one player
@@ -188,15 +199,22 @@ class Game():
                 print('Round: {:,}'.format(round_number))
 
             # Declaring Round object and playing a round
-            self.round = Round(players, self.card2score, assaf_penalty=self.assaf_penalty, card_num_2_max_value=card_num_2_max_value, verbose=self.verbose, seed=self.seed)
+            # TODO: make card_num_2_max_value dyanmic
+            self.round = Round(players, self.card2score, assaf_penalty=self.assaf_penalty,
+                               card_num_2_max_value=card_num_2_max_value, verbose=self.verbose, seed=self.seed)
             self.round.play()
 
             if self.seed:
                 self.seed += 1
             # ====== player score updating ==============
             for name, player in players.items():
+                # hand points go into score.
+                # If Yaniv was successful the caller gets 0 points (otherwise the original hand plus the assaf_penalty
+                # All other players get hand_points (including if one was an Assafer)
                 player.score += player.hand_points
 
+                # Jackpot!
+                # If a player hits these luck values their score is reduced
                 if player.score == 100:
                     player.score = 50
                     print("Lucky {}! Aggregated 100 points reduced to 50".format(name))
@@ -219,6 +237,7 @@ class Game():
             winner = players[list(players.keys())[0]]
             print("The winner is: {} with {:,} points".format(winner.name, winner.score))
         else:
+            # Case of 0 players left (double-or-more knockout case)
             print("Everybody loses ... ({} players left)".format(len(players)))
 
     # TODO: build on this principle to make card_num_to_max_single_value in a dyanmic fashion, i.e, with knowldege of cards thrown out
@@ -280,9 +299,9 @@ class Round():
         self.players = players
 
     def play(self):
+        # round starts with a full deck
         self.round_deck = dict(self.card2score)
 
-        # print(len(self.round_deck))
         self.distribute_cards()
 
         self.play_round()
@@ -292,11 +311,20 @@ class Round():
             np.random.seed(seed=self.seed)
             self.seed += 1
 
+    # TODO: make tidier, hopefully without using pandas
     def _player_order(self):
+        '''Determining the player order
+
+        Basic idea:
+        One of the players should have a starts_round=True (based on default or if they won the previous round,
+        by means of Yaniv-ing or Assaf-ing).
+        Then all the rest of the players are ordered by their indexes (insilico analogy of by "seating order")
+
+        :return:
+        '''
         import pandas as pd
         starting_player = None
         for name, player in self.players.items():
-            # print(player.name, player.starts_round)
             if player.starts_round == True:
 
                 if starting_player:
@@ -308,6 +336,7 @@ class Round():
         if self.verbose:
             print('Player starting the round: {}'.format(starting_player))
 
+        # TODO: this works but quite cumbersome. There is probably a cleaner way to code this
         l_current_player_names = list(self.players.keys())
         sr_current_player_names = pd.Series(l_current_player_names)
         idx_starting_player = sr_current_player_names[(sr_current_player_names == starting_player)].index
@@ -324,38 +353,59 @@ class Round():
         return player_order
 
     def distribute_cards(self, num_cards=5):
+        '''Distributing num_cards to each Player
+
+        :param num_cards: int. Number of cards in each hand at beginning of a round
+        :return:
+        '''
 
         for name, player in self.players.items():
             self._seeding()
+            # assigning randomised selected cards to Player
             player.cards_in_hand = np.random.choice(list(self.round_deck.keys()), size=num_cards, replace=False)
+            # calculating points in a hand of Player
             player._hand_points()
 
+            # Deleting selected cards from the round's deck
             for card in player.cards_in_hand:
                 del self.round_deck[card]
-            # print(player.name, player.hand_points)
 
     def play_round(self, player_order=None):
-
+        # flag to finish round. True: keep playing, False: end of round.
         yaniv_declared = False
 
         if not player_order:
             player_order = self._player_order()
 
-        for name, player in player_order.items():  # self.players.items():
+        for name, player in player_order.items():
             if not yaniv_declared:
                 if player.hand_points <= YANIV_LIMIT:
+                    # name considers declearing yaniv based on their Player.yaniv_strategy probability of success
                     yaniv_declared = self.decide_declare_yaniv(name)
                 if yaniv_declared:
+                    # round ends
                     self.round_summary(name)
-                    return None # End of round
+                    return None
                 else:
                     self.throw_card(name)
                     self.pull_card(name)
 
         if not yaniv_declared:
+            # at this stage we did a full "circle around the table",
+            # but did not conclude with a Yaniv declaration. We will go for another round
+            # perhaps there is a better way of doing this loop.
             self.play_round(player_order=player_order)
 
+    # Todo: add probabalistic approaches Issue #3
     def decide_declare_yaniv(self, name):
+        '''Returns Player boolean decision if to declare Yaniv
+
+        The decision is based on yaniv_strategy
+        (and when we introduce probabilistic approaches also on their prediction of success)
+
+        :param name: str. Name of Player considering declaring
+        :return: bool. True: declare Yaniv (end round), False: continue the round play
+        '''
         if self. verbose > 1:
             self.prob_lowest_hand(name)
 
@@ -363,9 +413,21 @@ class Round():
         if 'always' == player.yaniv_strategy:
             return True
 
+    # TODO: think more critically about the Assafer that gets to start the next round. (closest neighbor? lowest hand?)
     def round_summary(self, name_yaniv):
+        '''Summarising round results
+
+        * Figures out if the Yaniv declaration was successful or if Assafed.
+        * Updates hand points accordingly (e.g, if Assafed the hand of declarer increases by assaf_penalty)
+        * Determining who starts the next round (if successful Yaniv call it goes to name_yaniv Player,
+        otherwise one of the Assafers)
+
+        :param name_yaniv: str. name of person declaring Yaniv
+        :return: None
+        '''
         assafed = False
         yaniv_player = self.players[name_yaniv]
+        # Yaniv caller points. This is the benchmark for Assaf-ing.
         self.yaniv_points = int(yaniv_player.hand_points)
 
         if self.verbose:
@@ -373,27 +435,31 @@ class Round():
             print('Round Conclusion')
             print('{} declared Yaniv with {}'.format(name_yaniv, yaniv_player.hand_points))
 
-        assafers = []
+        assafers = [] # list of all people who can call Assaf
         for name, player in self.players.items():
             player.starts_round = False  # zero-ing out those that start round
 
             if name != name_yaniv:
-                # print(name, player.hand_points)
 
-                if player.hand_points <= self.yaniv_points: #yaniv_player.hand_points:
+                if player.hand_points <= self.yaniv_points:
                     assafed = True
                     assafers.append(name)
 
         if assafed:
-            assafer_name = assafers[0]
+            assafer_name = assafers[0] # currently using the first indexed as the Assafer
             if self.verbose:
                 print('ASSAF!')
-                print('{} Assafed by: {} (hand of {})'.format(name_yaniv, assafers[0], self.players[assafer_name].hand_points))
+                print('{} Assafed by: {} (hand of {})'.format(name_yaniv, assafers[0],
+                                                              self.players[assafer_name].hand_points))
 
+            # The Yaniv declarer is penalised by assaf_penalty because of incorrect call
             self.players[name_yaniv].hand_points += self.assaf_penalty
+            # The Assafer gets to start the next round
             self.players[assafer_name].starts_round = True
         else:
-            self.players[name_yaniv].hand_points = 0  # Yaniv player does not get points
+            # Yaniv was successful so the caller does not get points
+            self.players[name_yaniv].hand_points = 0
+            # ... and gets to start the next round.
             yaniv_player.starts_round = True
 
     def throw_card(self, name):
