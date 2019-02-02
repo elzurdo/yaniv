@@ -405,6 +405,8 @@ class Round():
 
         self.players = players
 
+        self.meta = {} # meta data for logging
+
     def play(self):
         # round starts with a full deck
         self.round_deck = dict(self.card_to_score)
@@ -476,6 +478,22 @@ class Round():
             for card in player.cards_in_hand:
                 del self.round_deck[card]
 
+    def _get_highest_turn_number(self):
+        if not self.meta:
+            return 0
+        else:
+            return max(self.meta.keys())
+
+    def _log_meta_data(self, player):
+        turn_number = self._get_highest_turn_number() + 1
+
+        self.meta[turn_number] = {}
+        self.meta[turn_number]["name"] = player.name
+        self.meta[turn_number]["cards_start"] = player.cards_in_hand.tolist()
+        self.meta[turn_number]["hand_points_start"] = player.hand_points
+        # TODO game_points Move to higher hierarchy in json when established for Game level.
+        self.meta[turn_number]["game_points"] = player.score
+
     def play_round(self, player_order=None):
         # flag to finish round. True: keep playing, False: end of round.
         yaniv_declared = False
@@ -484,6 +502,7 @@ class Round():
             player_order = self._player_order()
 
         for name, player in player_order.items():
+            self._log_meta_data(player)
             if not yaniv_declared:
                 if player.hand_points <= YANIV_LIMIT:
                     # name considers declearing yaniv based on their Player.yaniv_strategy probability of success
@@ -531,6 +550,8 @@ class Round():
         :param name_yaniv: str. name of person declaring Yaniv
         :return: None
         '''
+
+
         assafed = False
         yaniv_player = self.players[name_yaniv]
         # Yaniv caller points. This is the benchmark for Assaf-ing.
@@ -540,6 +561,8 @@ class Round():
             print('~' * 10)
             print('Round Conclusion')
             print('{} declared Yaniv with {}'.format(name_yaniv, yaniv_player.hand_points))
+        turn_number = self._get_highest_turn_number()  # turn_number used in self.meta below
+        self.meta[turn_number]["declared_yaniv"] = True
 
         assafers = []  # list of all people who can call Assaf
         for name, player in self.players.items():
@@ -558,6 +581,9 @@ class Round():
                 print('{} Assafed by: {} (hand of {})'.format(name_yaniv, assafers[0],
                                                               self.players[assafer_name].hand_points))
 
+            self.meta[turn_number]["assafed"] = {}
+            self.meta[turn_number]["assafed"]["by"] = assafer_name
+            self.meta[turn_number]["assafed"]["assafer_points"] = self.players[assafer_name].hand_points
             # The Yaniv declarer is penalised by assaf_penalty because of incorrect call
             self.players[name_yaniv].hand_points += self.assaf_penalty
             # The Assafer gets to start the next round
@@ -567,6 +593,8 @@ class Round():
             self.players[name_yaniv].hand_points = 0
             # ... and gets to start the next round.
             yaniv_player.starts_round = True
+
+        self.meta[turn_number]["hand_points_end"] = player.hand_points
 
     def cards_to_relevant_to_test_streak(initial_cards):
         '''Returns subset list of cards that might be relevant for streak
@@ -671,6 +699,9 @@ class Round():
         else:
             cards_thrown = df_cards_same_face.index.tolist()
 
+        turn_number = self._get_highest_turn_number()  # turn_number used in self.meta below
+        self.meta[turn_number]["throw_out"] = cards_thrown
+
         self.cards_thrown += cards_thrown
 
         self.cards_to_choose_from = cards_thrown
@@ -706,8 +737,16 @@ class Round():
             if self.verbose >= 2:
                 print("Deck is empty")
 
+        if from_deck:
+            pull_source = "deck"
+        else:
+            pull_source = "pile"
+        turn_number = self._get_highest_turn_number()  # turn_number used in self.meta below
+        self.meta[turn_number]["pulled"] = chosen_card[0]
+        self.meta[turn_number]["pulled_source"] = pull_source
+
         player._hand_points()
-        # print(name, player.cards_in_hand, player.hand_points)
+        self.meta[turn_number]["hand_points_end"] = player.hand_points
 
     def _calculate_stats___OLD(self, name):
         cards_player = list(self.players[name].cards_in_hand)
