@@ -7,14 +7,16 @@ from itertools import permutations
 MAX_ROUNDS = 400
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
+
 # ========= card related functions =========
+
 
 def face_to_value(face):
     if face == 'A':
         return 1
     elif face in ['J', 'Q', 'K']:
         return 10
-    elif 'oker' in face: # purposely 'oker1', 'okder2', and not 'joker'
+    elif 'oker' in face:  # purposely 'oker1', 'okder2', and not 'joker'
         return 0
     else:
         return int(face)
@@ -26,6 +28,8 @@ def card_to_suite(card):
     :return: str. possible values 's' (Spades), 'd' (Diamonds), 'h' (Hearts), 'c' (Clubs) and 'j' (Jokers)
     '''
     return card[0]
+
+
 def card_to_face(card):
     '''Returns the face of the card in str
 
@@ -37,6 +41,7 @@ def card_to_face(card):
     '''
     return card[1:]
 
+
 def deck(jokers=True):
     '''Return the deck in dict type
 
@@ -46,11 +51,11 @@ def deck(jokers=True):
     suits = ['d', 'h', 'c', 's']  # diamonds, hearts, clubs, spades
     faces = ['A'] + list(map(str, range(2, 11))) + ['J', 'Q', 'K']  # Ace, 2-10, Jack, Queen, King
 
-    points = list(range(1, 11)) + [10, 10, 10] # notice! J, Q, K all give 10 points
+    points = list(range(1, 11)) + [10, 10, 10]  # notice! J, Q, K all give 10 points
     card_to_score = {"{}{}".format(suit, face):
                          points[iface] for iface, face in enumerate(faces) for suit in suits}
 
-    values = list(range(1, 11)) + [11, 12, 13] # notice! J, Q, K are valued at 11, 12, 13, respectively
+    values = list(range(1, 11)) + [11, 12, 13]  # notice! J, Q, K are valued at 11, 12, 13, respectively
     card_to_streak_value = {"{}{}".format(suit, face):
                                 values[iface] for iface, face in enumerate(faces) for suit in suits}
 
@@ -58,21 +63,24 @@ def deck(jokers=True):
         card_to_score['joker1'] = 0
         card_to_score['joker2'] = 0
 
-        card_to_streak_value['joker1'] = -1 # better option than 0, because do not want to relate to A (1)
+        card_to_streak_value['joker1'] = -1  # better option than 0, because do not want to relate to A (1)
         card_to_streak_value['joker2'] = -1
 
     return card_to_score, card_to_streak_value
 
+
 card_to_score_all, card_to_streak_value_all = deck(jokers=True)
+
 
 def cards_to_df(cards):
     df_cards = pd.DataFrame({'face': list(map(card_to_face, cards)),
-                             'suit':  list(map(card_to_suite, cards)),
+                             'suit': list(map(card_to_suite, cards)),
                              'value': list(map(lambda x: card_to_score_all[x], cards))
                              },
                             index=cards)
 
     return df_cards
+
 
 def cards_df_to_face_counts_df(df_cards):
     df_face_counts = pd.DataFrame(df_cards['face'].value_counts()).rename(columns={'face': 'counts'})
@@ -81,6 +89,7 @@ def cards_df_to_face_counts_df(df_cards):
     df_face_counts['total'] = df_face_counts['counts'] * df_face_counts['value']
 
     return df_face_counts
+
 
 def cards_to_values(cards):
     values = []
@@ -120,7 +129,8 @@ def cards_to_relevant_to_test_streak(initial_cards):
 
     return cards
 
-#TODO: case of jokers
+
+# TODO: case of jokers
 def find_straight_set(initial_cards):
     '''Returning a set of 3 or more in the cards
 
@@ -175,7 +185,7 @@ def is_smaller_binary(value, thresh=None):
     return int(value <= thresh)
 
 
-#========================================
+# ========================================
 
 class Player():
     def __init__(self, name, throw_strategy='highest_card', yaniv_strategy='always'):
@@ -288,7 +298,7 @@ class Game():
         # players is a dictionary of players that progress to the next round (they have less than max_score)
         players = self._round_players()
 
-        while len(players) > 1: # the game terminates when left with one player
+        while len(players) > 1:  # the game terminates when left with one player
             if self.verbose:
                 print('=' * 20)
             round_number += 1
@@ -373,7 +383,7 @@ class Game():
         card_num_to_max_single_value[4] = 4  # 4, ace, ace, ace
         card_num_to_max_single_value[3] = 5  # 5, ace, ace
         card_num_to_max_single_value[2] = 6  # 6, ace
-        card_num_to_max_single_value[1] = 7  # this means: if player has 1 card in hand, the max value card for yaniv is 7: 7
+        card_num_to_max_single_value[1] = 7  # if player has 1 card in hand, the max value card for yaniv is 7: 7
 
         if self.jokers:
             card_num_to_max_single_value[5] = 5  # 5, joker, joker, ace, ace
@@ -502,7 +512,7 @@ class Round():
         :param name: str. Name of Player considering declaring
         :return: bool. True: declare Yaniv (end round), False: continue the round play
         '''
-        if self. verbose > 1:
+        if self.verbose > 1:
             self.prob_lowest_hand(name)
 
         player = self.players[name]
@@ -531,7 +541,7 @@ class Round():
             print('Round Conclusion')
             print('{} declared Yaniv with {}'.format(name_yaniv, yaniv_player.hand_points))
 
-        assafers = [] # list of all people who can call Assaf
+        assafers = []  # list of all people who can call Assaf
         for name, player in self.players.items():
             player.starts_round = False  # zero-ing out those that start round
 
@@ -542,7 +552,7 @@ class Round():
                     assafers.append(name)
 
         if assafed:
-            assafer_name = assafers[0] # currently using the first indexed as the Assafer
+            assafer_name = assafers[0]  # currently using the first indexed as the Assafer
             if self.verbose:
                 print('ASSAF!')
                 print('{} Assafed by: {} (hand of {})'.format(name_yaniv, assafers[0],
@@ -646,7 +656,7 @@ class Round():
         points_same_face = df_cards_same_face['value'].sum()
 
         # ======== Streak Option ============
-        points_streak = 0 # initial setting
+        points_streak = 0  # initial setting
 
         cards_in_streak = find_straight_set(player.cards_in_hand)
         if cards_in_streak:
@@ -655,12 +665,11 @@ class Round():
         if points_streak >= points_same_face:
             if self.verbose >= 1:
                 print("{} throwing streak {}, {}>={}, {}".format(name, cards_in_streak, points_streak, points_same_face,
-                                                          list(set(df_cards.index) - set(cards_in_streak)) )
-                                                          )
+                                                                 list(set(df_cards.index) - set(cards_in_streak)))
+                      )
             cards_thrown = cards_in_streak
         else:
             cards_thrown = df_cards_same_face.index.tolist()
-
 
         self.cards_thrown += cards_thrown
 
@@ -670,7 +679,6 @@ class Round():
         # TODO: use only df_cards and depricate cards_in_hand
         player.cards_in_hand = player.df_cards.index.tolist()
 
-
     def pull_card(self, name):
         highest_value_to_choose = 3
         # currently only pulling from deck
@@ -679,16 +687,17 @@ class Round():
         if len(self.round_deck) > 0:
             self._seeding()
 
-            sr_cards_to_choose_from = pd.Series(list(map(lambda x: card_to_score_all[x], self.cards_to_choose_from)), self.cards_to_choose_from)
+            sr_cards_to_choose_from = pd.Series(list(map(lambda x: card_to_score_all[x], self.cards_to_choose_from)),
+                                                self.cards_to_choose_from)
 
             from_deck = True
-            if sr_cards_to_choose_from.min() <= highest_value_to_choose: # pikcing up fro throw pile
+            if sr_cards_to_choose_from.min() <= highest_value_to_choose:  # pikcing up fro throw pile
                 chosen_card = [sr_cards_to_choose_from.sort_values().index[0]]
                 from_deck = False
-                #print('throw pile: {}'.format(chosen_card))
-            else: # picking up from deck
+                # print('throw pile: {}'.format(chosen_card))
+            else:  # picking up from deck
                 chosen_card = np.random.choice(list(self.round_deck.keys()), size=1, replace=False)
-                #print('deck pile: {}, instead of {}'.format(chosen_card, sr_cards_to_choose_from.min()))
+                # print('deck pile: {}, instead of {}'.format(chosen_card, sr_cards_to_choose_from.min()))
 
             if from_deck:
                 del self.round_deck[chosen_card[0]]
@@ -702,10 +711,10 @@ class Round():
 
     def _calculate_stats___OLD(self, name):
         cards_player = list(self.players[name].cards_in_hand)
-        cards_unknown =  list(set(self.card_to_score.keys()) - set(self.cards_thrown))
-        cards_unknown = list(set(cards_unknown) - set(cards_player) )
+        cards_unknown = list(set(self.card_to_score.keys()) - set(self.cards_thrown))
+        cards_unknown = list(set(cards_unknown) - set(cards_player))
 
-        cards_unknown_values =  []
+        cards_unknown_values = []
         for card in cards_unknown:
             cards_unknown_values.append(self.card_to_score[card])
         cards_unknown_values = pd.Series(cards_unknown_values).value_counts().sort_index()
@@ -723,9 +732,8 @@ class Round():
 
         return cards_unknown
 
-
     def prob_lowest_hand(self, name):
-        hand_points = self.players[name].hand_points # michal
+        hand_points = self.players[name].hand_points  # michal
 
         cards_unknown = self.name_2_cards_unknown(name)
         cards_unknown_values = cards_to_values(cards_unknown)
@@ -733,26 +741,32 @@ class Round():
         prob_lowest = 1.
         for name_other, player in self.players.items():
             if name_other != name:
-                prob_better_than_other = self.calculate_prob_yaniv_better_than_other(hand_points, name_other, cards_unknown_values)
+                prob_better_than_other = self.calculate_prob_yaniv_better_than_other(hand_points, name_other,
+                                                                                     cards_unknown_values)
 
                 prob_lowest *= prob_better_than_other
 
         if self.verbose >= 2:
             print('~' * 10)
-            print("The probability for {} to make a successful Yaniv decleration is: {:0.1f}%".format(name, 100. * prob_lowest))
+            print("The probability for {} to make a successful Yaniv decleration is: {:0.1f}%".format(name,
+                                                                                                      100. * prob_lowest))
 
     def calculate_prob_yaniv_better_than_other(self, hand_points, name_other, cards_unknown_values):
-        n_cards_other = len(self.players[name_other].cards_in_hand) # number of cards of other player
-        thresh = self.card_num_2_max_value[n_cards_other] # maximum value other can have to declare yaniv
+        n_cards_other = len(self.players[name_other].cards_in_hand)  # number of cards of other player
+        thresh = self.card_num_2_max_value[n_cards_other]  # maximum value other can have to declare yaniv
 
         if self.verbose >= 3:
             print('~' * 10)
-            print("Given {} has {} cards, the max threshold is {} (i.e, if has above this value, no chance to Assaf)".format(name_other, n_cards_other, thresh))
+            print(
+                "Given {} has {} cards, the max threshold is {} (i.e, if has above this value, no chance to Assaf)".format(
+                    name_other, n_cards_other, thresh))
 
-        cards_unknown_smaller_than_thresh_bool = list(map(lambda x: is_smaller_binary(x, thresh=thresh), cards_unknown_values))
+        cards_unknown_smaller_than_thresh_bool = list(
+            map(lambda x: is_smaller_binary(x, thresh=thresh), cards_unknown_values))
 
         # Calculating the probability that all cards in other player's hand is smaller than the max thresh possible to Yaniv
-        prob_all_cards_under_thresh = self.calculate_prob_all_cards_under_thresh(n_cards_other, cards_unknown_smaller_than_thresh_bool)
+        prob_all_cards_under_thresh = self.calculate_prob_all_cards_under_thresh(n_cards_other,
+                                                                                 cards_unknown_smaller_than_thresh_bool)
 
         # Given all cards are under the thresh -- what is the probability of NOT Assafing the Yaniv declaration?
 
@@ -761,8 +775,9 @@ class Round():
             if card <= thresh:
                 cards_unknown_values_small.append(card)
 
-
-        prob_above_yaniv_given_all_below_threshold = self.calculate_prob_above_yaniv_given_all_below_thresh(hand_points, cards_unknown_values_small, n_cards_other)
+        prob_above_yaniv_given_all_below_threshold = self.calculate_prob_above_yaniv_given_all_below_thresh(hand_points,
+                                                                                                            cards_unknown_values_small,
+                                                                                                            n_cards_other)
 
         prob_yaniv_better_than_other = (1 - prob_all_cards_under_thresh) + prob_above_yaniv_given_all_below_threshold * prob_all_cards_under_thresh
 
@@ -786,7 +801,8 @@ class Round():
 
         if self.verbose >= 3:
             print("Of a total of N={} unknown cards K={} card are below or equal to thresh".format(N, K))
-            print("The probability that all k={} of n={} cards are below thresh is: %{:0.1f}".format(k, n, prob_all_cards_under_thresh * 100.))
+            print("The probability that all k={} of n={} cards are below thresh is: %{:0.1f}".format(k, n,
+                                                                                                     prob_all_cards_under_thresh * 100.))
 
         return prob_all_cards_under_thresh
 
@@ -799,14 +815,9 @@ class Round():
             sum_ = sum(permutation)
             l_permutation_sums.append(sum_)
 
-            if sum_ > hand_points: #> self.yaniv_points:
+            if sum_ > hand_points:  # > self.yaniv_points:
                 other_above_yaniv_counter += 1
 
         prob_above_yaniv_given_below_threshold = other_above_yaniv_counter * 1. / len(l_permutation_sums)
 
         return prob_above_yaniv_given_below_threshold
-
-
-
-
-
