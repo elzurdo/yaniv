@@ -15,9 +15,9 @@ In the current format `yaniv` can run a game with `N` players from an overlooker
 One nice feature added is calculating the statistics of a Yaniv declaration being successful. 
 It is currently correct for two players, and for above, for the sake of simplicity, it (incorrectly) assumes independence of the cards of the potential Assafers. 
 
-To run a game:
+To run a game from main directory do:
 ```python3
-import yaniv
+from yaniv import yaniv
 
 players = ['John','Paul', 'Ringo','George']
 
