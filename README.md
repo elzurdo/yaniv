@@ -13,7 +13,7 @@ The main objectives for this ongoing project:
 
 In the current format `yaniv` can run a game with `N` players from an overlooker's point of view.  
 One nice feature added is calculating the statistics of a Yaniv declaration being successful. 
-It is currently corret for two players, and for above, for the sake of simplicity, it (incorrectly) assumes independence of the cards of the potential Assafers. 
+It is currently correct for two players, and for above, for the sake of simplicity, it (incorrectly) assumes independence of the cards of the potential Assafers. 
 
 To run a game:
 ```python3
@@ -79,6 +79,13 @@ The winner is: George with 194 points
 ```
 
 For more or less information change verbose, where `verbose=0` is minimal information and `verbose=3` is maximum.
+
+
+verbose:  
+0 - displays player names and the winners  
+1 - in addition to 0, displays Round information, beginning and end.  
+2 - in addition to 1, calculates and displays the probability of a Yaniv call to be successful  
+3 - in addition to 2, prints how the probability was calculated.
 
 # Requirements 
 python 3

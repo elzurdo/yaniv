@@ -207,6 +207,11 @@ class Player():
 class Game():
     def __init__(self, player_names, max_score=200, assaf_penalty=30, jokers=True, verbose=1, seed=4):
         '''
+        verbose:
+        0 - display player names, winner his/her score
+        1 - in addition to 0, displays Round information
+        2 - in addition to 1, displays probability of a Yaniv call being successful
+        3 - in addition to 2, displays how the probability was derived
 
         :param player_names: list of names
         :param max_score: int. Score which terminates game for player
