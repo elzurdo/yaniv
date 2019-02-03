@@ -188,10 +188,13 @@ def is_smaller_binary(value, thresh=None):
 # ========================================
 
 class Player():
-    def __init__(self, name, throw_strategy='highest_card', yaniv_strategy='always'):
+    def __init__(self, name, throw_strategy='highest_card', yaniv_strategy='always', seed=None):
+        if seed:
+            np.random.seed(seed)
         self.name = name
 
         self.throw_strategy = throw_strategy
+        self.pull_strategy = {"highest_card_value_to_pull": np.random.randint(1, 6)}
         self.yaniv_strategy = yaniv_strategy
         self.starts_round = False
 
@@ -234,6 +237,11 @@ class Game():
 
         self.play_game()
 
+    def _seeding(self):
+        if self.seed:
+            np.random.seed(seed=self.seed)
+            self.seed += 1
+
     def _players(self, player_names):
         '''Given a list of players names creates a list of of Player objects
 
@@ -242,11 +250,16 @@ class Game():
         '''
 
         self.all_players = []
-        print('Players:')
+        print('Players and strategies:')
 
         for name in player_names:
-            self.all_players.append(Player(name))
+            self._seeding()
+            player_ = Player(name, seed=self.seed)
+            self.all_players.append(player_)
             print(name)
+            print("Highest value card will pick from pile: {}".format(player_.pull_strategy["highest_card_value_to_pull"]))
+
+            print("-" * 10)
 
     def initiate_players_status(self):
         '''Initiates the status of all the players
@@ -494,7 +507,7 @@ class Round():
 
         self.meta[turn_number] = {}
         self.meta[turn_number]["name"] = player.name
-        self.meta[turn_number]["cards_start"] = player.cards_in_hand.tolist()
+        self.meta[turn_number]["cards_start"] = list(player.cards_in_hand)
         self.meta[turn_number]["hand_points_start"] = player.hand_points
         # TODO game_points Move to higher hierarchy in json when established for Game level.
         self.meta[turn_number]["game_points"] = player.score
@@ -716,39 +729,39 @@ class Round():
         player.cards_in_hand = player.df_cards.index.tolist()
 
     def pull_card(self, name):
-        highest_value_to_choose = 3
+
         # currently only pulling from deck
         player = self.players[name]
 
+        pull_source = None
         if len(self.round_deck) > 0:
             self._seeding()
+
+            highest_value_to_choose = player.pull_strategy["highest_card_value_to_pull"]
 
             sr_cards_to_choose_from = pd.Series(list(map(lambda x: card_to_score_all[x], self.cards_to_choose_from)),
                                                 self.cards_to_choose_from)
 
-            from_deck = True
-            if sr_cards_to_choose_from.min() <= highest_value_to_choose:  # pikcing up fro throw pile
+            if sr_cards_to_choose_from.min() <= highest_value_to_choose:  # pikcing up from throw pile
                 chosen_card = [sr_cards_to_choose_from.sort_values().index[0]]
-                from_deck = False
-                # print('throw pile: {}'.format(chosen_card))
+                pull_source = "pile"
+                # print('pull from pile: {}'.format(chosen_card))
             else:  # picking up from deck
                 chosen_card = np.random.choice(list(self.round_deck.keys()), size=1, replace=False)
                 # print('deck pile: {}, instead of {}'.format(chosen_card, sr_cards_to_choose_from.min()))
+                pull_source = "deck"
 
-            if from_deck:
+            if "deck" == pull_source:
                 del self.round_deck[chosen_card[0]]
             player.cards_in_hand = np.append(player.cards_in_hand, chosen_card)
         else:
             if self.verbose >= 2:
                 print("Deck is empty")
 
-        if from_deck:
-            pull_source = "deck"
-        else:
-            pull_source = "pile"
         turn_number = self._get_highest_turn_number()  # turn_number used in self.meta below
-        self.meta[turn_number]["pulled"] = chosen_card[0]
-        self.meta[turn_number]["pulled_source"] = pull_source
+        if pull_source:
+            self.meta[turn_number]["pulled"] = chosen_card[0]
+            self.meta[turn_number]["pulled_source"] = pull_source
 
         player._hand_points()
         self.meta[turn_number]["hand_points_end"] = player.hand_points
