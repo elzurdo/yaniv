@@ -496,6 +496,9 @@ class Round():
             for card in player.cards_in_hand:
                 del self.round_deck[card]
 
+        self.pile_cards_to_choose_from = np.random.choice(list(self.round_deck.keys()), size=1, replace=False)
+        del self.round_deck[self.pile_cards_to_choose_from[0]]
+
     def _get_highest_turn_number(self):
         if not self.meta:
             return 0
@@ -530,8 +533,8 @@ class Round():
                     self.round_summary(name)
                     return None
                 else:
-                    self.throw_card(name)
-                    self.pull_card(name)
+                    self.throw_pick_cards(name)
+
 
         if not yaniv_declared:
             # at this stage we did a full "circle around the table",
@@ -683,6 +686,15 @@ class Round():
 
         return result
 
+    def throw_pick_cards(self, name):
+        # Throwing and picking up cards
+
+        player_ = self.players[name]
+        #print(self.pile_cards_to_choose_from, player_.cards_in_hand)
+
+        self.throw_card(name)
+        self.pull_card(name)
+
     def throw_card(self, name):
         '''name throws out card(s)
         Needs to figure out between Same Face (default) or Streak.
@@ -722,7 +734,7 @@ class Round():
 
         self.cards_thrown += cards_thrown
 
-        self.cards_to_choose_from = cards_thrown
+        self.this_player_thrown_pile_cards_to_choose_from = cards_thrown
 
         player.df_cards = df_cards.drop(cards_thrown)
         # TODO: use only df_cards and depricate cards_in_hand
@@ -739,8 +751,8 @@ class Round():
 
             highest_value_to_choose = player.pull_strategy["highest_card_value_to_pull"]
 
-            sr_cards_to_choose_from = pd.Series(list(map(lambda x: card_to_score_all[x], self.cards_to_choose_from)),
-                                                self.cards_to_choose_from)
+            sr_cards_to_choose_from = pd.Series(list(map(lambda x: card_to_score_all[x], self.pile_cards_to_choose_from)),
+                                                self.pile_cards_to_choose_from)
 
             if sr_cards_to_choose_from.min() <= highest_value_to_choose:  # pikcing up from throw pile
                 chosen_card = [sr_cards_to_choose_from.sort_values().index[0]]
@@ -757,6 +769,8 @@ class Round():
         else:
             if self.verbose >= 2:
                 print("Deck is empty")
+
+        self.pile_cards_to_choose_from = self.this_player_thrown_pile_cards_to_choose_from
 
         turn_number = self._get_highest_turn_number()  # turn_number used in self.meta below
         if pull_source:
