@@ -689,13 +689,137 @@ class Round():
     def throw_pick_cards(self, name):
         # Throwing and picking up cards
 
-        player_ = self.players[name]
+        # ======== Deciding Which to Throw and Pick base on Current hand and available from Pile ========
+        player = self.players[name]
         #print(self.pile_cards_to_choose_from, player_.cards_in_hand)
 
-        self.throw_card(name)
-        self.pull_card(name)
+        df_cards_in_hand = cards_to_df(player.cards_in_hand)
+        df_cards_in_hand["in_hand"] = True
 
-    def throw_card(self, name):
+        # ========= In Hand Same Face =========
+
+        df_cards_same_face_in_hand = self.df_cards_to_cards_same_face_max(df_cards_in_hand)
+        points_same_face_in_hand = df_cards_same_face_in_hand['value'].sum()
+        points_same_face_best = points_same_face_in_hand
+
+        # ========= In Hand Streak ============
+        cards_in_streak_in_hand = find_straight_set(player.cards_in_hand)
+        if cards_in_streak_in_hand:
+            points_streak_in_hand = df_cards_in_hand.loc[cards_in_streak_in_hand, 'value'].sum()
+        else:
+            points_streak_in_hand = 0
+        points_streak_best = points_streak_in_hand
+
+        dict_card_pick_up = {} # keys: "face", "streak" indicating preferred reasoning to pick up
+        dict_card_pick_up["face"] = {}
+        dict_card_pick_up["streak"] = {}
+
+        flag = 0
+        for card_pick_up in self.pile_cards_to_choose_from:
+            df_cards_choose_from = cards_to_df([card_pick_up])
+            df_cards_choose_from["in_hand"] = False
+            df_cards = df_cards_in_hand.append(df_cards_choose_from)
+
+            # ====== Same Face =======
+            df_cards_same_face = self.df_cards_to_cards_same_face_max(df_cards)
+            points_same_face = df_cards_same_face['value'].sum()
+            #
+            if (points_same_face > points_same_face_best) & (len(df_cards_same_face)>1):
+                #card_pick_up = card
+                #print(card_pick_up, points_same_face_in_hand_best, points_same_face)
+                #print(df_cards_same_face)
+
+                #print("True in DF", True in df_cards_same_face["in_hand"], df_cards_same_face["in_hand"])
+                if not df_cards_same_face[df_cards_same_face["in_hand"]].empty:
+                    dict_card_pick_up["face"]["card_pick_up"] = str(card_pick_up)
+                    cards_save = df_cards_same_face[df_cards_same_face["in_hand"]].index.tolist()
+                    dict_card_pick_up["face"]["cards_save"]  = list(cards_save)
+                    dict_card_pick_up["face"]["points"] = int(points_same_face)
+
+                    if flag == 1:
+                        print("Face match: Might save {} and might pickup {} for (worth {} points) "\
+                              .format(dict_card_pick_up["face"]["cards_save"],
+                                      dict_card_pick_up["face"]["card_pick_up"],
+                                      dict_card_pick_up["face"]["points"]
+                                      ))
+                points_same_face_best = points_same_face
+
+            # ===== Streak ========
+            cards_in_streak = find_straight_set(df_cards.index.tolist())
+            if cards_in_streak:
+                points_streak = df_cards.loc[cards_in_streak, 'value'].sum()
+            else:
+                points_streak = 0
+
+            if points_streak > points_streak_best:
+
+                cards_save = list( set(cards_in_streak) - set([card_pick_up]))
+                dict_card_pick_up["streak"]["card_pick_up"] = str(card_pick_up)
+                dict_card_pick_up["streak"]["cards_save"] = list(cards_save)
+                dict_card_pick_up["streak"]["points"] = int(points_streak)
+
+                points_streak_best = int(points_streak) # verifies picking up best option for streak
+
+                if flag > 1:
+                    print(self.pile_cards_to_choose_from, player.cards_in_hand)
+                    print("Streak found!: Might save {} and might pickup {} for (worth {} points) " \
+                          .format(dict_card_pick_up["streak"]["cards_save"],
+                                  dict_card_pick_up["streak"]["card_pick_up"],
+                                  dict_card_pick_up["streak"]["points"]
+                                  ))
+
+        cards_save = None
+        card_pickup = None
+        save_for = None
+
+        if dict_card_pick_up["streak"] or dict_card_pick_up["face"]:
+            # choosing if to save potential streak or face
+            if not dict_card_pick_up["streak"]:
+                save_for = "face"
+            elif not dict_card_pick_up["face"]:
+                save_for = "streak"
+            else:
+                if dict_card_pick_up["streak"]["points"] > dict_card_pick_up["face"]["points"]:
+                    save_for = "streak"
+                else:
+                    save_for = "face"
+
+            cards_save = dict_card_pick_up[save_for]["cards_save"]
+            card_pickup = dict_card_pick_up[save_for]["card_pick_up"]
+            points_worth = dict_card_pick_up[save_for]["points"]
+
+            #if save_for == "streak":
+            #    print("{} prepares for {} worth {} points by  saving {} and picking up {}".format(name, save_for, points_worth, cards_save, card_pickup))
+
+        player.cards_in_hand_to_throw = list(player.cards_in_hand)
+
+        flag = None #save_for == "streak"
+        if cards_save:
+            if flag:
+                print("have cards: {}".format(list(player.cards_in_hand)))
+            for card in cards_save:
+
+                player.cards_in_hand_to_throw.remove(card)
+                if flag:
+                    print("removing card from pile option: {}, pile option {}".format(card, list(player.cards_in_hand_to_throw) ))
+                    print("left cards: {}".format(list(player.cards_in_hand)))
+
+
+        self.throw_card(name, flag=None)
+        self.pick_up_card(name, card_pickup=card_pickup, flag=None)
+
+    def df_cards_to_cards_same_face_max(self, df_cards):
+        # Given a hand of cards, return a subset which has the maximum points with the same face
+        df_face_counts = cards_df_to_face_counts_df(df_cards)
+        df_face_counts_max = df_face_counts[df_face_counts['total'] == df_face_counts['total'].max()]
+
+        df_cards_same_face = df_cards[df_cards['face'] == df_face_counts_max.index[0]]
+
+        return df_cards_same_face
+
+
+
+    def throw_card(self, name, flag=None):
         '''name throws out card(s)
         Needs to figure out between Same Face (default) or Streak.
 
@@ -704,19 +828,19 @@ class Round():
         '''
         player = self.players[name]
 
-        df_cards = cards_to_df(player.cards_in_hand)
+        if flag:
+            print("!! player cards to throw: {}".format(player.cards_in_hand_to_throw))
+        df_cards = cards_to_df(player.cards_in_hand_to_throw)
 
         # ======= Same Face Option =========
-        df_face_counts = cards_df_to_face_counts_df(df_cards)
-        df_face_counts_max = df_face_counts[df_face_counts['total'] == df_face_counts['total'].max()]
+        df_cards_same_face = self.df_cards_to_cards_same_face_max(df_cards)
 
-        df_cards_same_face = df_cards[df_cards['face'] == df_face_counts_max.index[0]]
         points_same_face = df_cards_same_face['value'].sum()
 
         # ======== Streak Option ============
         points_streak = 0  # initial setting
 
-        cards_in_streak = find_straight_set(player.cards_in_hand)
+        cards_in_streak = find_straight_set(player.cards_in_hand_to_throw)
         if cards_in_streak:
             points_streak = df_cards.loc[cards_in_streak, 'value'].sum()
 
@@ -729,6 +853,9 @@ class Round():
         else:
             cards_thrown = df_cards_same_face.index.tolist()
 
+        if flag:
+            print("!!! cards to be thrown: {}".format(cards_thrown))
+
         turn_number = self._get_highest_turn_number()  # turn_number used in self.meta below
         self.meta[turn_number]["throw_out"] = cards_thrown
 
@@ -736,17 +863,29 @@ class Round():
 
         self.this_player_thrown_pile_cards_to_choose_from = cards_thrown
 
-        player.df_cards = df_cards.drop(cards_thrown)
-        # TODO: use only df_cards and depricate cards_in_hand
-        player.cards_in_hand = player.df_cards.index.tolist()
+        player.cards_in_hand = list( set(player.cards_in_hand) - set(cards_thrown) )   #player.df_cards.index.tolist()
 
-    def pull_card(self, name):
+    def pick_up_card(self, name, card_pickup=None, flag=None):
 
         # currently only pulling from deck
         player = self.players[name]
 
         pull_source = None
-        if len(self.round_deck) > 0:
+        deck_size = len(self.round_deck) # card_pickup
+
+        if card_pickup:
+
+            # players decided which card to pick up from pile
+            #print(list(player.cards_in_hand))
+            pull_source = "pile"
+            chosen_card = [card_pickup]
+            if flag:
+                print("before pickup chosen card: ", list(player.cards_in_hand))
+            player.cards_in_hand = np.append(player.cards_in_hand, chosen_card)
+            if flag:
+                print("picking up from pile: {}: {}".format(chosen_card, player.cards_in_hand.tolist()))
+        elif (deck_size > 0):
+            # players hasn't decided yet to pickup from pile or deck and deck is full
             self._seeding()
 
             highest_value_to_choose = player.pull_strategy["highest_card_value_to_pull"]
@@ -767,6 +906,9 @@ class Round():
                 del self.round_deck[chosen_card[0]]
             player.cards_in_hand = np.append(player.cards_in_hand, chosen_card)
         else:
+            # deck is empty
+            # TODO: what should the player do? pick from top of pile?
+            # This might create an endless loop ...
             if self.verbose >= 2:
                 print("Deck is empty")
 
