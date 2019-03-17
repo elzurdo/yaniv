@@ -423,7 +423,8 @@ class Round():
 
         self.players = players
 
-        self.meta = {} # meta data for logging
+        self.meta = [] # meta data for logging
+        self.turn_number = 0 # tracking turn number.
 
     def play(self):
         # round starts with a full deck
@@ -506,14 +507,12 @@ class Round():
             return max(self.meta.keys())
 
     def _log_meta_data(self, player):
-        turn_number = self._get_highest_turn_number() + 1
-
-        self.meta[turn_number] = {}
-        self.meta[turn_number]["name"] = player.name
-        self.meta[turn_number]["cards_start"] = list(player.cards_in_hand)
-        self.meta[turn_number]["hand_points_start"] = player.hand_points
+        self.meta_turn = {}
+        self.meta_turn["name"] = player.name
+        self.meta_turn["cards_start"] = list(player.cards_in_hand)
+        self.meta_turn["hand_points_start"] = player.hand_points
         # TODO game_points Move to higher hierarchy in json when established for Game level.
-        self.meta[turn_number]["game_points"] = player.score
+        self.meta_turn["game_points"] = player.score
 
     def play_round(self, player_order=None):
         # flag to finish round. True: keep playing, False: end of round.
@@ -523,17 +522,23 @@ class Round():
             player_order = self._player_order()
 
         for name, player in player_order.items():
+            self.turn_number += 1
             self._log_meta_data(player)
-            if not yaniv_declared:
+            if not yaniv_declared: # NOT sure of the necessity of the condition here. recheck the logic.
                 if player.hand_points <= YANIV_LIMIT:
                     # name considers declearing yaniv based on their Player.yaniv_strategy probability of success
                     yaniv_declared = self.decide_declare_yaniv(name)
                 if yaniv_declared:
                     # round ends
+                    self.meta.append(self.meta_turn) # updating meta data array
                     self.round_summary(name)
                     return None
                 else:
-                    self.throw_pick_cards(name)
+                    card_pickup = self.throw_pick_cards(name)
+
+                    self.throw_card(name, flag=None)
+                    self.pick_up_card(name, card_pickup=card_pickup, flag=None)
+                    self.meta.append(self.meta_turn) # updating meta data array
 
 
         if not yaniv_declared:
@@ -582,8 +587,8 @@ class Round():
             print('~' * 10)
             print('Round Conclusion')
             print('{} declared Yaniv with {}'.format(name_yaniv, yaniv_player.hand_points))
-        turn_number = self._get_highest_turn_number()  # turn_number used in self.meta below
-        self.meta[turn_number]["declared_yaniv"] = True
+
+        self.meta_turn["declared_yaniv"] = True
 
         assafers = []  # list of all people who can call Assaf
         for name, player in self.players.items():
@@ -602,9 +607,9 @@ class Round():
                 print('{} Assafed by: {} (hand of {})'.format(name_yaniv, assafers[0],
                                                               self.players[assafer_name].hand_points))
 
-            self.meta[turn_number]["assafed"] = {}
-            self.meta[turn_number]["assafed"]["by"] = assafer_name
-            self.meta[turn_number]["assafed"]["assafer_points"] = self.players[assafer_name].hand_points
+            self.meta_turn["assafed"] = {}
+            self.meta_turn["assafed"]["by"] = assafer_name
+            self.meta_turn["assafer_points"] = self.players[assafer_name].hand_points
             # The Yaniv declarer is penalised by assaf_penalty because of incorrect call
             self.players[name_yaniv].hand_points += self.assaf_penalty
             # The Assafer gets to start the next round
@@ -615,7 +620,7 @@ class Round():
             # ... and gets to start the next round.
             yaniv_player.starts_round = True
 
-        self.meta[turn_number]["hand_points_end"] = player.hand_points
+        self.meta_turn["hand_points_end"] = player.hand_points
 
     def cards_to_relevant_to_test_streak(initial_cards):
         '''Returns subset list of cards that might be relevant for streak
@@ -687,6 +692,36 @@ class Round():
         return result
 
     def throw_pick_cards(self, name):
+        """Decides if to pickup available on top of pile and save some cards in hand
+        This function considers the best option in this turn in regards to action in the next.
+
+        It looks at the available cards on top of the pile and runs scenarios that would be best for the next turn.
+
+        E.g,
+        (1) If in hand there is [s9, sJ, d4] and on top of the pile it may choose one of [s10, d10], it will realise
+        that if it saves [s9, sJ] and picks up s10, in the next turn it could throw out the streak [s9, s10, sJ].
+
+        (2) If in hand there is [s9, sJ, d4] and on the top of the pile it may choose one of [d9, d3], it will realise
+        that if it saves [s9] and picks up d9, in the next turn it could throw out the same-face compbination [s9, d9]
+
+        The combo of either streak of same-face combo with the highest future points will be selected.
+
+        :param name: 'str', Player name
+        :return:
+
+        TODO:
+        Edge Case!
+        The saving of cards is reflected in updating the cards in hand to throw:
+        player.cards_in_hand_to_throw.remove(card)
+
+        This does not consider the case where it is not feasible to save all cards required for the next-turn combo.
+
+        E.g,
+        If in hand there is [s9, sJ] and on top of the pile it may choose one of [s10, d10], it will incorrectly
+        request to save [s9, sJ] and pick up s10. In practice, however that means that
+
+        In hand sA, s2 and on pile s3.
+        """
         # Throwing and picking up cards
 
         # ======== Deciding Which to Throw and Pick base on Current hand and available from Pile ========
@@ -714,6 +749,10 @@ class Round():
         dict_card_pick_up["face"] = {}
         dict_card_pick_up["streak"] = {}
 
+        if 1 == self.turn_number: # value added only for 1st turn. All the rest is same info as 'throw_out'
+            print(self.turn_number, self.pile_cards_to_choose_from)
+            self.meta_turn["pile_cards_to_choose_from"] = list(self.pile_cards_to_choose_from)
+
         flag = 0
         for card_pick_up in self.pile_cards_to_choose_from:
             df_cards_choose_from = cards_to_df([card_pick_up])
@@ -725,11 +764,6 @@ class Round():
             points_same_face = df_cards_same_face['value'].sum()
             #
             if (points_same_face > points_same_face_best) & (len(df_cards_same_face)>1):
-                #card_pick_up = card
-                #print(card_pick_up, points_same_face_in_hand_best, points_same_face)
-                #print(df_cards_same_face)
-
-                #print("True in DF", True in df_cards_same_face["in_hand"], df_cards_same_face["in_hand"])
                 if not df_cards_same_face[df_cards_same_face["in_hand"]].empty:
                     dict_card_pick_up["face"]["card_pick_up"] = str(card_pick_up)
                     cards_save = df_cards_same_face[df_cards_same_face["in_hand"]].index.tolist()
@@ -770,7 +804,7 @@ class Round():
 
         cards_save = None
         card_pickup = None
-        save_for = None
+        save_for = None # might not need this statement
 
         if dict_card_pick_up["streak"] or dict_card_pick_up["face"]:
             # choosing if to save potential streak or face
@@ -786,8 +820,7 @@ class Round():
 
             cards_save = dict_card_pick_up[save_for]["cards_save"]
             card_pickup = dict_card_pick_up[save_for]["card_pick_up"]
-            points_worth = dict_card_pick_up[save_for]["points"]
-
+            # points_worth = dict_card_pick_up[save_for]["points"]
             #if save_for == "streak":
             #    print("{} prepares for {} worth {} points by  saving {} and picking up {}".format(name, save_for, points_worth, cards_save, card_pickup))
 
@@ -805,8 +838,8 @@ class Round():
                     print("left cards: {}".format(list(player.cards_in_hand)))
 
 
-        self.throw_card(name, flag=None)
-        self.pick_up_card(name, card_pickup=card_pickup, flag=None)
+
+        return card_pickup
 
     def df_cards_to_cards_same_face_max(self, df_cards):
         # Given a hand of cards, return a subset which has the maximum points with the same face
@@ -856,8 +889,7 @@ class Round():
         if flag:
             print("!!! cards to be thrown: {}".format(cards_thrown))
 
-        turn_number = self._get_highest_turn_number()  # turn_number used in self.meta below
-        self.meta[turn_number]["throw_out"] = cards_thrown
+        self.meta_turn["throw_out"]= cards_thrown
 
         self.cards_thrown += cards_thrown
 
@@ -874,7 +906,6 @@ class Round():
         deck_size = len(self.round_deck) # card_pickup
 
         if card_pickup:
-
             # players decided which card to pick up from pile
             #print(list(player.cards_in_hand))
             pull_source = "pile"
@@ -914,13 +945,12 @@ class Round():
 
         self.pile_cards_to_choose_from = self.this_player_thrown_pile_cards_to_choose_from
 
-        turn_number = self._get_highest_turn_number()  # turn_number used in self.meta below
         if pull_source:
-            self.meta[turn_number]["pulled"] = chosen_card[0]
-            self.meta[turn_number]["pulled_source"] = pull_source
+            self.meta_turn["pulled"] = chosen_card[0]
+            self.meta_turn["pulled_source"] = pull_source
 
         player._hand_points()
-        self.meta[turn_number]["hand_points_end"] = player.hand_points
+        self.meta_turn["hand_points_end"] = player.hand_points
 
     def _calculate_stats___OLD(self, name):
         cards_player = list(self.players[name].cards_in_hand)
