@@ -1,5 +1,12 @@
+import numpy as np
+
+from stats import card_number_to_max_card_value_to_declare_yaniv
+
+
 ASSAF_PENALTY = 30
 END_GAME_SCORE = 200
+MAX_ROUNDS = 4
+YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
 
 # TODO: check if redundant with card_to_score
@@ -95,7 +102,7 @@ class Game():
         3 - in addition to 2, displays how the probability was derived
 
         :param player_names: list of names
-        :param max_score: int. Score which terminates game for player
+        :param end_game_score: int. Score which terminates game for player
         :param assaf_penalty: int. The penalty score for an Assaf
         :param jokers: bool. True to use 2 jokers in the game False without.
         :param verbose: int
@@ -117,7 +124,7 @@ class Game():
         self.verbose = verbose
 
         self.generate_players(player_names)
-        self.card_to_score, self.card_to_streak_value = define_deck(jokers=play_jokers)
+        self.card_to_score, self.card_to_streak_value = define_deck(play_jokers=play_jokers)
 
     def play(self):
         self.initiate_players_status()
@@ -141,12 +148,13 @@ class Game():
         self.all_players = []
         print('generating players and their playing strategies:')
 
-        for name in player_names:
+        for idx, name in enumerate(player_names):
             self._seeding()
             player = Player(name, seed=self.seed)
+            player.id = idx
             self.all_players.append(player)
             print(name)
-            print('Pile pick strategy:\npicks if min pile card <= {}'.format(player_.pull_strategy['highest_card_value_to_pull'])
+            print('Pile pick strategy:\npicks if min pile top min value  <= {}'.format(player.pile_pull_strategy['highest_card_value_to_pull']))
             #print("Highest value card will pick from pile: {}".format(player_.pull_strategy["highest_card_value_to_pull"]))
 
             print("-" * 10)
@@ -165,3 +173,234 @@ class Game():
 
             if iplayer == 0:
                 player.starts_round = True
+
+
+    def get_round_players(self): # was _round_player
+        '''Returns a dictionary of Player objects only of players that have less the end_game_score.
+
+        This is used to track which players advance to the next round
+
+        :return: dict. keys are player names (str) and values are the corresponding Player objects
+        '''
+        players = {}
+
+        for player in self.all_players:
+            if player.in_play:
+                if player.game_score < self.end_game_score:
+                    players[player.name] = player
+                    if self.verbose >= 3:
+                        print(player.name, player.game_score, 'IN')
+                else:
+                    player.in_play = False
+                    if self.verbose >= 2:
+                        print(player.name, player.game_score, 'OUT')
+                        print('-' * 20)
+
+        return players
+
+    def play_game(self):
+        '''Game play
+
+        :return:
+        '''
+
+        # card_num_to_max_value is a mapping from the number of cards in hand to the maximum value of single card in hand
+        # that can result in a successful Yaniv. This is useful to calculate heuristics of Yaniv success probabilities.
+        card_num_to_max_value = card_number_to_max_card_value_to_declare_yaniv(play_jokers=self.play_jokers)
+
+        # round number counter. The first round is value 1, so setting counter to 0.
+        round_number = 0
+
+        # players is a dictionary of players that progress to the next round (they have less than max_score)
+        players = self.get_round_players()
+
+        while (len(players) > 1) and (round_number < MAX_ROUNDS):  # the game terminates when left with one player
+            if self.verbose:
+                print('=' * 20)
+            round_number += 1
+            if self.verbose >= 1:
+                print('Round: {:,}'.format(round_number))
+
+            # Declaring Round object and playing a round
+            # TODO: make card_num_2_max_value dyanmic
+
+
+            self.round = Round(players, self.card_to_score, assaf_penalty=self.assaf_penalty,
+                               card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed)
+            self.round.play()
+
+            """
+
+            if self.seed:
+                self.seed += 1
+            # ====== player score updating ==============
+            for name, player in players.items():
+                # hand points go into score.
+                # If Yaniv was successful the caller gets 0 points (otherwise the original hand plus the assaf_penalty
+                # All other players get hand_points (including if one was an Assafer)
+                player.score += player.hand_points
+
+                # Jackpot!
+                # If a player hits these luck values their score is reduced
+                if player.score == 100:
+                    player.score = 50
+                    print("Lucky {}! Aggregated 100 points reduced to 50".format(name))
+                elif player.score == 200:
+                    print("Lucky {}! Aggregated 200 points reduced to 150".format(name))
+                    player.score = 150
+
+                if self.verbose:
+                    print(player.name, player.hand_points, player.cards_in_hand, player.score)
+            # ===========================
+
+            # Round conclusion
+            players = self._round_players()  # players for next round
+
+            if round_number > MAX_ROUNDS:
+                print('breaking at max rounds: {:,}'.format(MAX_ROUNDS))
+                break
+            """
+
+        if len(players) == 1:
+            winner = players[list(players.keys())[0]]
+            print("The winner is: {} with {:,} points".format(winner.name, winner.score))
+        elif round_number == MAX_ROUNDS:
+            print("Reached max rounds. Left standing: {}".format(', '.join([player for player in players])))
+        else:
+            # Case of 0 players left (double-or-more knockout case)
+            print("Everybody loses ... ({} players left)".format(len(players)))
+
+class Round():
+    def __init__(self, players, card_to_score, card_num_to_max_value=None, assaf_penalty=30, seed=4, verbose=0, do_stats=False):
+        self.seed = seed
+        self.verbose = verbose
+        self.assaf_penalty = assaf_penalty
+        self.card_to_score = card_to_score
+        self.card_num_to_max_value = card_num_to_max_value
+        self.cards_thrown = []
+        self.do_stats = do_stats
+
+        self.players = players
+
+        self.meta = {}  # meta data for logging
+
+    def play(self):
+        # round starts with a full deck
+        self.round_deck = self.card_to_score.copy()
+
+        self.distribute_cards()
+
+        self.play_round()
+
+    def _seeding(self):
+        if self.seed:
+            np.random.seed(seed=self.seed)
+            self.seed += 1
+
+
+    def distribute_cards(self, num_cards=5):
+        '''Distributing num_cards to each Player
+
+        :param num_cards: int. Number of cards in each hand at beginning of a round
+        :return:
+        '''
+
+        for name, player in self.players.items():
+            self._seeding()
+            # assigning randomised selected cards to Player
+            player.cards_in_hand = np.random.choice(list(self.round_deck.keys()), size=num_cards, replace=False)
+            # calculating points in a hand of Player
+            player.sum_hand_points(self.card_to_score)
+
+            # Deleting selected cards from the round's deck
+            for card in player.cards_in_hand:
+                del self.round_deck[card]
+
+    # TODO: make tidier, hopefully without using pandas
+    def get_player_order(self):
+        '''Determining the player order
+
+        Basic idea:
+        One of the players should have a starts_round=True (based on default or if they won the previous round,
+        by means of Yaniv-ing or Assaf-ing).
+        Then all the rest of the players are ordered by their indexes (insilico analogy of by "seating order")
+
+        :return:
+        '''
+        starting_player_name = None
+        for name, player in self.players.items():
+            if player.starts_round == True:
+
+                if starting_player_name:
+                    print('Error! {} and {} both have starting status'.format(starting_player_name, name))
+                    sys.exit(1)
+
+                starting_player_name = name
+
+        if self.verbose:
+            print('Player starting the round: {}'.format(starting_player_name))
+
+        player_names = [name for name in self.players.keys()]
+        idxs = np.array([self.players[name].id for name in self.players.keys()])
+        idx_starting = self.players[starting_player_name].id
+        player_names_ordered = [player_names[idx] for idx in (idxs - idx_starting) % len(self.players)]
+
+        players_ordered = {}
+        for name in player_names_ordered:
+            players_ordered[name] = self.players[name]
+
+        return players_ordered
+
+    # Todo: add probabalistic approaches Issue #3
+    def decide_declare_yaniv(self, name):
+        '''Returns Player boolean decision if to declare Yaniv
+
+        The decision is based on yaniv_strategy
+        (and when we introduce probabilistic approaches also on their prediction of success)
+
+        :param name: str. Name of Player considering declaring
+        :return: bool. True: declare Yaniv (end round), False: continue the round play
+        '''
+        if (self.verbose > 1) and self.do_stats:
+            self.prob_lowest_hand(name)
+
+        player = self.players[name]
+        if 'always' == player.yaniv_strategy:
+            return True
+
+    def play_round(self, players_ordered=None):
+        # flag to finish round. True: keep playing, False: end of round.
+        yaniv_declared = False
+
+        if not players_ordered:
+            players_ordered = self.get_player_order()
+
+        # TODO: Consider verbosity !!!
+        print('playing order: ', ', '.join(list(players_ordered.keys())))
+
+
+        for name, player in players_ordered.items():
+            # self._log_meta_data(player)
+            if not yaniv_declared:
+                if player.hand_points <= YANIV_LIMIT:
+                    # name considers declearing yaniv based on their Player.yaniv_strategy probability of success
+                    yaniv_declared = self.decide_declare_yaniv(name)
+                """ !!! continue from here !!!
+                if yaniv_declared:
+                    # round ends
+                    self.round_summary(name)
+                    return None
+                else:
+                    self.throw_card(name)
+                    self.pull_card(name)
+                """
+
+        """
+        if not yaniv_declared:
+            # at this stage we did a full "circle around the table",
+            # but did not conclude with a Yaniv declaration. We will go for another round
+            # perhaps there is a better way of doing this loop.
+            self.play_round(players_ordered=players_ordered)
+        """
+
+
