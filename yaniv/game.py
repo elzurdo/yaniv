@@ -1,11 +1,12 @@
 import numpy as np
+import sys
 
 from stats import card_number_to_max_card_value_to_declare_yaniv
 
 
 ASSAF_PENALTY = 30
 END_GAME_SCORE = 200
-MAX_ROUNDS = 4
+MAX_ROUNDS = 10
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
 
@@ -229,7 +230,7 @@ class Game():
                                card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed)
             self.round.play()
 
-            """
+            #"""
 
             if self.seed:
                 self.seed += 1
@@ -238,32 +239,32 @@ class Game():
                 # hand points go into score.
                 # If Yaniv was successful the caller gets 0 points (otherwise the original hand plus the assaf_penalty
                 # All other players get hand_points (including if one was an Assafer)
-                player.score += player.hand_points
+                player.game_score += player.hand_points
 
                 # Jackpot!
                 # If a player hits these luck values their score is reduced
-                if player.score == 100:
-                    player.score = 50
+                if player.game_score == 100:
+                    player.game_score = 50
                     print("Lucky {}! Aggregated 100 points reduced to 50".format(name))
-                elif player.score == 200:
+                elif player.game_score == 200:
                     print("Lucky {}! Aggregated 200 points reduced to 150".format(name))
-                    player.score = 150
+                    player.game_score = 150
 
                 if self.verbose:
-                    print(player.name, player.hand_points, player.cards_in_hand, player.score)
+                    print(player.name, player.hand_points, player.cards_in_hand, player.game_score)
             # ===========================
 
             # Round conclusion
-            players = self._round_players()  # players for next round
+            players = self.get_round_players()  # players for next round
 
             if round_number > MAX_ROUNDS:
                 print('breaking at max rounds: {:,}'.format(MAX_ROUNDS))
                 break
-            """
+            #"""
 
         if len(players) == 1:
             winner = players[list(players.keys())[0]]
-            print("The winner is: {} with {:,} points".format(winner.name, winner.score))
+            print("{} is the winner with {:,} points".format(winner.name, winner.game_score))
         elif round_number == MAX_ROUNDS:
             print("Reached max rounds. Left standing: {}".format(', '.join([player for player in players])))
         else:
@@ -367,6 +368,75 @@ class Round():
         player = self.players[name]
         if 'always' == player.yaniv_strategy:
             return True
+        
+    # TODO: The Assaf should be the Assafer with the lowest value. If two equally lowest choose randomly
+    # TODO: deal with collecting meta data, and flag self.collect_meta
+    def round_summary(self, name_yaniv):
+        '''Summarising round results
+
+        * Figures out if the Yaniv declaration was successful or if Assafed.
+        * Updates hand points accordingly (e.g, if Assafed the hand of declarer increases by assaf_penalty)
+        * Determining who starts the next round (if successful Yaniv call it goes to name_yaniv Player,
+        otherwise one of the Assafers)
+
+        :param name_yaniv: str. name of person declaring Yaniv
+        :return: None
+        '''
+
+
+        assafed = False
+        yaniv_player = self.players[name_yaniv]
+        # Yaniv caller points. This is the benchmark for Assaf-ing.
+        self.yaniv_points = int(yaniv_player.hand_points)
+
+        if self.verbose:
+            print('~' * 10)
+            print('Round Conclusion')
+            print('{} declared Yaniv with {}'.format(name_yaniv, yaniv_player.hand_points))
+
+        """
+        if self.collect_meta:
+            turn_number = self._get_highest_turn_number()  # turn_number used in self.meta below
+            self.meta[turn_number]["declared_yaniv"] = True
+        """
+
+        assafers = []  # list of all people who can call Assaf
+        for name, player in self.players.items():
+            player.starts_round = False  # zero-ing out those that start round
+
+            if name != name_yaniv:
+
+                if player.hand_points <= self.yaniv_points:
+                    assafed = True
+                    assafers.append(name)
+
+        if assafed:
+            assafer_name = assafers[0]  # currently using the first indexed as the Assafer
+            if self.verbose:
+                print('ASSAF!')
+                print('{} Assafed by: {} (hand of {})'.format(name_yaniv, assafers[0],
+                                                              self.players[assafer_name].hand_points))
+
+            """
+            if self.collect_meta:
+                self.meta[turn_number]["assafed"] = {}
+                self.meta[turn_number]["assafed"]["by"] = assafer_name
+                self.meta[turn_number]["assafed"]["assafer_points"] = self.players[assafer_name].hand_points
+            """
+            # The Yaniv declarer is penalised by assaf_penalty because of incorrect call
+            self.players[name_yaniv].hand_points += self.assaf_penalty
+            # The Assafer gets to start the next round
+            self.players[assafer_name].starts_round = True
+        else:
+            # Yaniv was successful so the caller does not get points
+            self.players[name_yaniv].hand_points = 0
+            # ... and gets to start the next round.
+            yaniv_player.starts_round = True
+
+        """
+        if self.collect_meta:
+            self.meta[turn_number]["hand_points_end"] = player.hand_points
+        """
 
     def play_round(self, players_ordered=None):
         # flag to finish round. True: keep playing, False: end of round.
@@ -384,12 +454,17 @@ class Round():
             if not yaniv_declared:
                 if player.hand_points <= YANIV_LIMIT:
                     # name considers declearing yaniv based on their Player.yaniv_strategy probability of success
+
+                    # ------ return to this ------
                     yaniv_declared = self.decide_declare_yaniv(name)
-                """ !!! continue from here !!!
+                # ----------temporary ---------
+                yaniv_declared = np.random.choice([True, False], size=1, p=[0.4, 0.6])[0]
+                # -----------------------------
                 if yaniv_declared:
                     # round ends
                     self.round_summary(name)
                     return None
+                """ !!! continue from here !!!
                 else:
                     self.throw_card(name)
                     self.pull_card(name)
