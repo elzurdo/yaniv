@@ -329,7 +329,9 @@ class Round():
         :return:
         '''
         starting_player_name = None
-        for name, player in self.players.items():
+
+
+        for idx, (name, player) in enumerate(self.players.items()):
             if player.starts_round == True:
 
                 if starting_player_name:
@@ -337,14 +339,16 @@ class Round():
                     sys.exit(1)
 
                 starting_player_name = name
+                idx_starting = idx
 
         if self.verbose:
             print('Player starting the round: {}'.format(starting_player_name))
 
-        player_names = [name for name in self.players.keys()]
-        idxs = np.array([self.players[name].id for name in self.players.keys()])
-        idx_starting = self.players[starting_player_name].id
-        player_names_ordered = [player_names[idx] for idx in (idxs - idx_starting) % len(self.players)]
+        player_names = list(self.players.keys())
+        idxs = np.arange(len(player_names))
+        order_ids = (idxs - idx_starting) % len(self.players)
+        player_names_ordered = {order_id: player_names[idx] for idx, order_id in zip(idxs, order_ids)}
+        player_names_ordered = [player_names_ordered[order_id] for order_id in sorted(player_names_ordered, reverse=False)]
 
         players_ordered = {}
         for name in player_names_ordered:
