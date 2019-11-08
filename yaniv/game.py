@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import numpy as np
 import sys
 
@@ -9,6 +11,8 @@ END_GAME_SCORE = 200
 MAX_ROUNDS = 10
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
+SUITE_CHAR_TO_SYMBOL = {'d': '♦', 'h': '♥', 'c': '♣', 's': '♠'}
+
 
 # TODO: check if redundant with card_to_score
 def rank_to_value(rank):
@@ -16,11 +20,14 @@ def rank_to_value(rank):
         return 1
     elif rank in ['J', 'Q', 'K']:
         return 10
-    elif rank == 'W':  # purposely 'oker1', 'okder2', and not 'joker'
+    elif rank == 'W':
         return 0
     else:
         return int(rank)
 
+
+def card_to_pretty(card):
+    return ''.join([SUITE_CHAR_TO_SYMBOL[char] if char in SUITE_CHAR_TO_SYMBOL.keys() else char for char in card])
 
 def card_to_suite(card):
     '''Returns suite of card
@@ -49,7 +56,7 @@ def define_deck(play_jokers=True):
     :param play_jokers: bool. True: game played with 2 jokers, False: without
     :return: dict. keys are the sting of the card and the values are the card points
     '''
-    suits = ['♦', '♥', '♣', '♠']  # diamonds, hearts, clubs, spades
+    suits = ['d', 'h', 'c', 's']   #  ['♦', '♥', '♣', '♠']  # diamonds, hearts, clubs, spades
     ranks = ['A'] + list(map(str, range(2, 11))) + ['J', 'Q', 'K']  # Ace, 2-10, Jack, Queen, King
 
     points = list(range(1, 11)) + [10, 10, 10]  # notice! J, Q, K all give 10 points
@@ -329,7 +336,6 @@ class Round():
         :return:
         '''
         starting_player_name = None
-
 
         for idx, (name, player) in enumerate(self.players.items()):
             if player.starts_round == True:
