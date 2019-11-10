@@ -7,6 +7,8 @@ from game import (rank_to_value,
                   JOKER_SUITE, JOKER_RANK
                   )
 
+RANKS = ['A'] + map(str, range(2, 11)) + ['J', 'Q', 'K', JOKER_RANK]
+
 
 class TestRankToValue(TestCase):
     def test_ace(self):
@@ -27,8 +29,9 @@ class TestRankToValue(TestCase):
 class TestCardToSuite(TestCase):
     def test_suites(self):
         for suite in SUITE_CHAR_TO_SYMBOL.keys():
-            card = '{}{}'.format(2, suite)
-            self.assertEqual(card_to_suite(card), suite)
+            for rank in RANKS:
+                card = '{}{}'.format(rank, suite)
+                self.assertEqual(card_to_suite(card), suite)
 
     def test_jokers(self):
         for val in [1, 2]:
@@ -38,9 +41,8 @@ class TestCardToSuite(TestCase):
 
 class TestCardToRank(TestCase):
     def test(self):
-        ranks = ['A'] + map(str, range(2, 11)) + ['J', 'Q', 'K', JOKER_RANK]
 
         for suite in SUITE_CHAR_TO_SYMBOL.keys():
-            for rank in ranks:
+            for rank in RANKS:
                 card = '{}{}'.format(rank, suite)
                 self.assertEqual(card_to_rank(card), rank)

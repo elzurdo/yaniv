@@ -38,10 +38,10 @@ def card_to_suite(card):
     :param card: str
     :return: str. possible values 's' (Spades), 'd' (Diamonds), 'h' (Hearts), 'c' (Clubs) and 'w' (Jokers)
     '''
-    if card[1] in [1, 2]:
+    if card[-1] in [1, 2]:
         return JOKER_SUITE
 
-    return card[1]
+    return card[-1]
 
 
 def card_to_rank(card):
