@@ -12,6 +12,8 @@ MAX_ROUNDS = 10
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
 SUITE_CHAR_TO_SYMBOL = {'d': '♦', 'h': '♥', 'c': '♣', 's': '♠'}
+JOKER_SUITE = 'w'
+JOKER_RANK = 'W'
 
 
 # TODO: check if redundant with card_to_score
@@ -29,13 +31,14 @@ def rank_to_value(rank):
 def card_to_pretty(card):
     return ''.join([SUITE_CHAR_TO_SYMBOL[char] if char in SUITE_CHAR_TO_SYMBOL.keys() else char for char in card])
 
+
 def card_to_suite(card):
     '''Returns suite of card
     :param card: str
     :return: str. possible values 's' (Spades), 'd' (Diamonds), 'h' (Hearts), 'c' (Clubs) and 'w' (Jokers)
     '''
     if card[0] in [1, 2]:
-        return 'w'
+        return JOKER_SUITE
 
     return card[0]
 
@@ -43,12 +46,13 @@ def card_to_suite(card):
 def card_to_rank(card):
     '''Returns the face of the card in str
 
-    Note that possible values are 'A', '2', '3', ... '10', 'J', 'Q', 'K' and 'w' for joker
+    Note that possible values are 'A', '2', '3', ... '10', 'J', 'Q', 'K' and JOKER_RANK
 
     :param card: str.
     :return: str.
     '''
     return card[1:]
+
 
 def define_deck(play_jokers=True):
     '''Return the deck in dict type
@@ -68,11 +72,11 @@ def define_deck(play_jokers=True):
                                 values[iface] for iface, face in enumerate(ranks) for suit in suits}
 
     if play_jokers:
-        card_to_score['1W'] = 0
-        card_to_score['2W'] = 0
+        card_to_score['1{}'.format(JOKER_RANK)] = 0
+        card_to_score['2{}'.format(JOKER_RANK)] = 0
 
-        card_to_streak_value['1W'] = -1  # better option than 0, because A has value 1
-        card_to_streak_value['2W'] = -1
+        card_to_streak_value['1{}'.format(JOKER_RANK)] = -1  # better option than 0, because A has value 1
+        card_to_streak_value['2{}'.format(JOKER_RANK)] = -1
 
     return card_to_score, card_to_streak_value
 
