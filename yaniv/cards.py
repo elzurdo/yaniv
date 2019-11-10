@@ -4,27 +4,37 @@ from itertools import groupby
 from operator import itemgetter
 import numpy as np
 
-SUITE_CHAR_TO_SYMBOL = {'d': '♦', 'h': '♥', 'c': '♣', 's': '♠'}
-JOKER_SUITE = 'w'
+
+JOKER_SUITE1 = 'a'
+JOKER_SUITE2 = 'b'
 JOKER_RANK = 'W'
 JOKER_STREAK_VALUE = -1  # better than 0, because A has value 1
+
+SUITE_CHAR_TO_SYMBOL = {'d': '♦', 'h': '♥', 'c': '♣', 's': '♠', JOKER_SUITE1: '☻', JOKER_SUITE2:'☺'}
+
+RANK_TO_VALUE = {str(rank): rank for rank in range(2, 11)}
+for combos in [('A', 1), ('J', 10), ('Q', 10), ('K', 10), (JOKER_RANK, 0)]:
+    RANK_TO_VALUE[combos[0]] = combos[1]
+
 RANK_TO_STREAK_VALUES = {str(rank): rank for rank in range(2, 11)}
 for combos in [('A', 1), ('J', 11), ('Q', 12), ('K', 13), (JOKER_RANK, JOKER_STREAK_VALUE)]:
     RANK_TO_STREAK_VALUES[combos[0]] = combos[1]
 
 
+def card_to_value(card):
+    return RANK_TO_VALUE[card_to_rank(card)]
 
 
-# TODO: check if redundant with card_to_score
+def cards_to_value_sum(these_cards):
+    return np.sum(list(map(card_to_value, these_cards)))
+
+
+def card_to_streak_value(card):
+    return RANK_TO_STREAK_VALUES[card_to_rank(card)]
+
+
 def rank_to_value(rank):
-    if rank == 'A':
-        return 1
-    elif rank in ['J', 'Q', 'K']:
-        return 10
-    elif rank == 'W':
-        return 0
-    else:
-        return int(rank)
+    return RANK_TO_VALUE[rank]
 
 
 def card_to_pretty(card):
@@ -34,10 +44,8 @@ def card_to_pretty(card):
 def card_to_suite(card):
     '''Returns suite of card
     :param card: str
-    :return: str. possible values 's' (Spades), 'd' (Diamonds), 'h' (Hearts), 'c' (Clubs) and 'w' (Jokers)
+    :return: str. possible values 's' (Spades), 'd' (Diamonds), 'h' (Hearts), 'c' (Clubs) and JOKER_SUITE1, JOKER_SUITE2 (Jokers)
     '''
-    if card[-1] in [1, 2]:
-        return JOKER_SUITE
 
     return card[-1]
 
@@ -53,7 +61,9 @@ def card_to_rank(card):
     return card[:-1]
 
 
-# TODO rename card_to_streak_value so not to confuse with function by same name
+# TODO: rename card_to_streak_value so not to confuse with function by same name
+# TODO: same issue with `card_to_value`
+# TODO: update to use: RANK_TO_VALUE, RANK_TO_STREAK_VALUES, or consider dropping overall.
 def define_deck(play_jokers=True):
     '''Return the deck in dict type
 
@@ -72,17 +82,14 @@ def define_deck(play_jokers=True):
                                 streak_values[irank] for irank, rank in enumerate(ranks) for suit in suits}
 
     if play_jokers:
-        card_to_value['{}1'.format(JOKER_RANK)] = 0
-        card_to_value['{}2'.format(JOKER_RANK)] = 0
+        card_to_value['{}{}'.format(JOKER_RANK, JOKER_SUITE1)] = 0
+        card_to_value['{}{}'.format(JOKER_RANK, JOKER_SUITE2)] = 0
 
-        card_to_streak_value['{}1'.format(JOKER_RANK)] = JOKER_STREAK_VALUE
-        card_to_streak_value['{}2'.format(JOKER_RANK)] = JOKER_STREAK_VALUE
+        card_to_streak_value['{}{}'.format(JOKER_RANK, JOKER_SUITE1)] = JOKER_STREAK_VALUE
+        card_to_streak_value['{}{}'.format(JOKER_RANK, JOKER_SUITE2)] = JOKER_STREAK_VALUE
 
     return card_to_value, card_to_streak_value
 
-
-def card_to_streak_value(card):
-    return RANK_TO_STREAK_VALUES[card_to_rank(card)]
 
 
 def sort_cards(cards, return_streak_values=False):
@@ -93,6 +100,16 @@ def sort_cards(cards, return_streak_values=False):
         return cards, sorted(streak_values)
     else:
         return cards
+
+
+# TODO: might consider ordering of combos that have same sum based on number of cards
+def sort_card_combos(card_combos, descending=True, return_sum_values=True):
+    card_combo_sums = [cards_to_value_sum(these_cards) for these_cards in card_combos]
+    card_combos_ordered = [combos for _, combos in sorted(zip(card_combo_sums, card_combos), key=lambda pair: pair[0], reverse=descending)]
+
+    if return_sum_values:
+        return card_combos_ordered, card_combo_sums
+    return card_combos_ordered
 
 
 def cards_to_same_rank_combinations(cards):

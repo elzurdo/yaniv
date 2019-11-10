@@ -9,7 +9,7 @@ from stats import card_number_to_max_card_value_to_declare_yaniv
 
 ASSAF_PENALTY = 30
 END_GAME_SCORE = 200
-MAX_ROUNDS = 10
+MAX_ROUNDS = 3
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
 
