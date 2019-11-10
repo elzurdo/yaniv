@@ -14,6 +14,7 @@ YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 SUITE_CHAR_TO_SYMBOL = {'d': '♦', 'h': '♥', 'c': '♣', 's': '♠'}
 JOKER_SUITE = 'w'
 JOKER_RANK = 'W'
+JOKER_STREAK_VALUE = -1  # better than 0, because A has value 1
 
 
 # TODO: check if redundant with card_to_score
@@ -37,21 +38,21 @@ def card_to_suite(card):
     :param card: str
     :return: str. possible values 's' (Spades), 'd' (Diamonds), 'h' (Hearts), 'c' (Clubs) and 'w' (Jokers)
     '''
-    if card[0] in [1, 2]:
+    if card[1] in [1, 2]:
         return JOKER_SUITE
 
-    return card[0]
+    return card[1]
 
 
 def card_to_rank(card):
-    '''Returns the face of the card in str
+    '''Returns the rank of the card in str
 
     Note that possible values are 'A', '2', '3', ... '10', 'J', 'Q', 'K' and JOKER_RANK
 
     :param card: str.
     :return: str.
     '''
-    return card[1:]
+    return card[:-1]
 
 
 def define_deck(play_jokers=True):
@@ -63,22 +64,22 @@ def define_deck(play_jokers=True):
     suits = ['d', 'h', 'c', 's']   #  ['♦', '♥', '♣', '♠']  # diamonds, hearts, clubs, spades
     ranks = ['A'] + list(map(str, range(2, 11))) + ['J', 'Q', 'K']  # Ace, 2-10, Jack, Queen, King
 
-    points = list(range(1, 11)) + [10, 10, 10]  # notice! J, Q, K all give 10 points
-    card_to_score = {"{}{}".format(suit, face):
-                         points[iface] for iface, face in enumerate(ranks) for suit in suits}
+    values = list(range(1, 11)) + [10, 10, 10]  # notice! J, Q, K all give 10 points
+    card_to_value = {"{}{}".format(rank, suit):
+                         values[irank] for irank, rank in enumerate(ranks) for suit in suits}
 
-    values = list(range(1, 11)) + [11, 12, 13]  # notice! J, Q, K are valued at 11, 12, 13, respectively
-    card_to_streak_value = {"{}{}".format(suit, face):
-                                values[iface] for iface, face in enumerate(ranks) for suit in suits}
+    streak_values = list(range(1, 11)) + [11, 12, 13]  # notice! J, Q, K are valued at 11, 12, 13, respectively
+    card_to_streak_value = {"{}{}".format(rank, suit):
+                                streak_values[irank] for irank, rank in enumerate(ranks) for suit in suits}
 
     if play_jokers:
-        card_to_score['1{}'.format(JOKER_RANK)] = 0
-        card_to_score['2{}'.format(JOKER_RANK)] = 0
+        card_to_value['{}1'.format(JOKER_RANK)] = 0
+        card_to_value['{}2'.format(JOKER_RANK)] = 0
 
-        card_to_streak_value['1{}'.format(JOKER_RANK)] = -1  # better option than 0, because A has value 1
-        card_to_streak_value['2{}'.format(JOKER_RANK)] = -1
+        card_to_streak_value['{}1'.format(JOKER_RANK)] = JOKER_STREAK_VALUE
+        card_to_streak_value['{}2'.format(JOKER_RANK)] = JOKER_STREAK_VALUE
 
-    return card_to_score, card_to_streak_value
+    return card_to_value, card_to_streak_value
 
 
 # TODO: design and implement different throw_strategy
@@ -262,7 +263,7 @@ class Game():
                     player.game_score = 150
 
                 if self.verbose:
-                    print(player.name, player.hand_points, player.cards_in_hand, player.game_score)
+                    print(player.name, player.hand_points, [card_to_pretty(card) for card in player.cards_in_hand], player.game_score)
             # ===========================
 
             # Round conclusion

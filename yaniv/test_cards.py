@@ -27,12 +27,12 @@ class TestRankToValue(TestCase):
 class TestCardToSuite(TestCase):
     def test_suites(self):
         for suite in SUITE_CHAR_TO_SYMBOL.keys():
-            card = '{}{}'.format(suite, 2)
+            card = '{}{}'.format(2, suite)
             self.assertEqual(card_to_suite(card), suite)
 
     def test_jokers(self):
         for val in [1, 2]:
-            card = '{}{}'.format(JOKER_SUITE, val)
+            card = '{}{}'.format(val, JOKER_SUITE)
             self.assertEqual(card_to_suite(card), JOKER_SUITE)
 
 
@@ -42,9 +42,5 @@ class TestCardToRank(TestCase):
 
         for suite in SUITE_CHAR_TO_SYMBOL.keys():
             for rank in ranks:
-                print(rank)
-                card = '{}{}'.format(suite, rank)
+                card = '{}{}'.format(rank, suite)
                 self.assertEqual(card_to_rank(card), rank)
-
-
-
