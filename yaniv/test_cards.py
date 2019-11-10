@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from game import (rank_to_value,
+from cards import (rank_to_value,
                   card_to_suite,
                   card_to_rank,
                   SUITE_CHAR_TO_SYMBOL,
