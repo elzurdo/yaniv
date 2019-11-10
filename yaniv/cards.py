@@ -61,35 +61,23 @@ def card_to_rank(card):
     return card[:-1]
 
 
-# TODO: rename card_to_streak_value so not to confuse with function by same name
-# TODO: same issue with `card_to_value`
-# TODO: update to use: RANK_TO_VALUE, RANK_TO_STREAK_VALUES, or consider dropping overall.
 def define_deck(play_jokers=True):
     '''Return the deck in dict type
 
     :param play_jokers: bool. True: game played with 2 jokers, False: without
-    :return: dict. keys are the sting of the card and the values are the card points
+    :return: list of cards
     '''
-    suits = ['d', 'h', 'c', 's']   #  ['♦', '♥', '♣', '♠']  # diamonds, hearts, clubs, spades
+
+    suits = ['d', 'h', 'c', 's']   #  diamonds, hearts, clubs, spades
     ranks = ['A'] + list(map(str, range(2, 11))) + ['J', 'Q', 'K']  # Ace, 2-10, Jack, Queen, King
 
-    values = list(range(1, 11)) + [10, 10, 10]  # notice! J, Q, K all give 10 points
-    card_to_value = {"{}{}".format(rank, suit):
-                         values[irank] for irank, rank in enumerate(ranks) for suit in suits}
-
-    streak_values = list(range(1, 11)) + [11, 12, 13]  # notice! J, Q, K are valued at 11, 12, 13, respectively
-    card_to_streak_value = {"{}{}".format(rank, suit):
-                                streak_values[irank] for irank, rank in enumerate(ranks) for suit in suits}
+    deck = ["{}{}".format(rank, suit) for rank in ranks for suit in suits]
 
     if play_jokers:
-        card_to_value['{}{}'.format(JOKER_RANK, JOKER_SUITE1)] = 0
-        card_to_value['{}{}'.format(JOKER_RANK, JOKER_SUITE2)] = 0
+        deck.append('{}{}'.format(JOKER_RANK, JOKER_SUITE1))
+        deck.append('{}{}'.format(JOKER_RANK, JOKER_SUITE1))
 
-        card_to_streak_value['{}{}'.format(JOKER_RANK, JOKER_SUITE1)] = JOKER_STREAK_VALUE
-        card_to_streak_value['{}{}'.format(JOKER_RANK, JOKER_SUITE2)] = JOKER_STREAK_VALUE
-
-    return card_to_value, card_to_streak_value
-
+    return deck
 
 
 def sort_cards(cards, return_streak_values=False):

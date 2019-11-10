@@ -3,13 +3,13 @@
 import numpy as np
 import sys
 
-from cards import define_deck, card_to_pretty
+from cards import define_deck, card_to_pretty, cards_to_valid_throw_combinations, sort_card_combos, card_to_value
 from stats import card_number_to_max_card_value_to_declare_yaniv
 
 
 ASSAF_PENALTY = 30
 END_GAME_SCORE = 200
-MAX_ROUNDS = 3
+MAX_ROUNDS = 100
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
 
@@ -28,13 +28,13 @@ class Player():
         self.yaniv_strategy = yaniv_strategy
         self.starts_round = False
 
-    def sum_hand_points(self, card_to_score):
+    def sum_hand_points(self):
         '''Calculates the sum of point in a hand
         '''
 
         self.hand_points = 0
         for card in self.cards_in_hand:
-            self.hand_points += card_to_score[card]
+            self.hand_points += card_to_value(card)
 
 class Game():
     def __init__(self, player_names, end_game_score=None, assaf_penalty=None, play_jokers=True, verbose=1, seed=None):
@@ -68,7 +68,8 @@ class Game():
         self.verbose = verbose
 
         self.generate_players(player_names)
-        self.card_to_score, self.card_to_streak_value = define_deck(play_jokers=play_jokers)
+        self.deck = define_deck(play_jokers=play_jokers)
+        print(self.deck)
 
     def play(self):
         self.initiate_players_status()
@@ -169,7 +170,7 @@ class Game():
             # TODO: make card_num_2_max_value dyanmic
 
 
-            self.round = Round(players, self.card_to_score, assaf_penalty=self.assaf_penalty,
+            self.round = Round(players, self.deck, assaf_penalty=self.assaf_penalty,
                                card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed)
             self.round.play()
 
@@ -215,11 +216,11 @@ class Game():
             print("Everybody loses ... ({} players left)".format(len(players)))
 
 class Round():
-    def __init__(self, players, card_to_score, card_num_to_max_value=None, assaf_penalty=30, seed=4, verbose=0, do_stats=False):
+    def __init__(self, players, deck, card_num_to_max_value=None, assaf_penalty=30, seed=4, verbose=0, do_stats=False):
         self.seed = seed
         self.verbose = verbose
         self.assaf_penalty = assaf_penalty
-        self.card_to_score = card_to_score
+        self.deck = deck
         self.card_num_to_max_value = card_num_to_max_value
         self.cards_thrown = []
         self.do_stats = do_stats
@@ -230,7 +231,7 @@ class Round():
 
     def play(self):
         # round starts with a full deck
-        self.round_deck = self.card_to_score.copy()
+        self.round_deck = list(self.deck)
 
         self.distribute_cards()
 
@@ -252,13 +253,13 @@ class Round():
         for name, player in self.players.items():
             self._seeding()
             # assigning randomised selected cards to Player
-            player.cards_in_hand = np.random.choice(list(self.round_deck.keys()), size=num_cards, replace=False)
+            player.cards_in_hand = np.random.choice(self.round_deck, size=num_cards, replace=False)
             # calculating points in a hand of Player
-            player.sum_hand_points(self.card_to_score)
+            player.sum_hand_points()
 
             # Deleting selected cards from the round's deck
             for card in player.cards_in_hand:
-                del self.round_deck[card]
+                self.round_deck.remove(card)
 
     # TODO: make tidier, hopefully without using pandas
     def get_player_order(self):
@@ -391,9 +392,7 @@ class Round():
         if not players_ordered:
             players_ordered = self.get_player_order()
 
-        # TODO: Consider verbosity !!!
-        print('playing order: ', ', '.join(list(players_ordered.keys())))
-
+        #print('playing order: ', ', '.join(list(players_ordered.keys())))
 
         for name, player in players_ordered.items():
             # self._log_meta_data(player)
@@ -404,24 +403,53 @@ class Round():
                     # ------ return to this ------
                     yaniv_declared = self.decide_declare_yaniv(name)
                 # ----------temporary ---------
-                yaniv_declared = np.random.choice([True, False], size=1, p=[0.4, 0.6])[0]
+                ## yaniv_declared = np.random.choice([True, False], size=1, p=[0.4, 0.6])[0]
                 # -----------------------------
                 if yaniv_declared:
                     # round ends
                     self.round_summary(name)
                     return None
-                """ !!! continue from here !!!
-                else:
-                    self.throw_card(name)
-                    self.pull_card(name)
-                """
 
-        """
+                else:
+                    self.throw_cards_to_pile(name)
+                    self.pull_card(name)
+
+
+
         if not yaniv_declared:
             # at this stage we did a full "circle around the table",
             # but did not conclude with a Yaniv declaration. We will go for another round
             # perhaps there is a better way of doing this loop.
             self.play_round(players_ordered=players_ordered)
-        """
+
+
+    def throw_cards_to_pile(self, name):
+        player = self.players[name]
+        valid_combinations = cards_to_valid_throw_combinations(player.cards_in_hand)
+        sorted_combinations, sorted_combinations_sums = sort_card_combos(valid_combinations, descending=True, return_sum_values=True)
+
+        # ======= temp, highest combinations =======
+        cards_to_throw = sorted_combinations[0]
+        # =====================
+
+        # updating player hand cards
+        player.cards_in_hand = [this_card for this_card in player.cards_in_hand if this_card not in cards_to_throw]
+
+        self.cards_thrown += cards_to_throw
+        self.pile_top_cards = cards_to_throw
+
+    def pull_card(self, name):
+        player = self.players[name]
+        this_card = self.pull_card_from_deck()
+        player.cards_in_hand.append(this_card)
+        player.sum_hand_points()
+
+    def pull_card_from_deck(self):
+        this_card = np.random.choice(self.round_deck, size=1, replace=False)[0]
+        self.round_deck.remove(this_card)
+
+        return this_card
+
+
 
 

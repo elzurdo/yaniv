@@ -42,3 +42,4 @@ class TestCardToRank(TestCase):
             for rank in RANKS:
                 card = '{}{}'.format(rank, suite)
                 self.assertEqual(card_to_rank(card), rank)
+
