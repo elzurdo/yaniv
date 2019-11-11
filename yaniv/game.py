@@ -3,7 +3,13 @@
 import numpy as np
 import sys
 
-from cards import define_deck, card_to_pretty, cards_to_valid_throw_combinations, sort_card_combos, card_to_value
+from cards import (define_deck, card_to_pretty,
+                   cards_to_valid_throw_combinations,
+                   sort_card_combos,
+                   card_to_value,
+                   cards_same_rank,
+                   sort_cards
+                   )
 from stats import card_number_to_max_card_value_to_declare_yaniv
 
 
@@ -422,7 +428,6 @@ class Round():
             # perhaps there is a better way of doing this loop.
             self.play_round(players_ordered=players_ordered)
 
-
     def throw_cards_to_pile(self, name):
         player = self.players[name]
         valid_combinations = cards_to_valid_throw_combinations(player.cards_in_hand)
@@ -440,7 +445,13 @@ class Round():
 
     def pull_card(self, name):
         player = self.players[name]
-        this_card = self.pull_card_from_deck()
+
+        # ======== need to devise better strategy ===========
+        pull_card_function = np.random.choice([self.pull_card_from_deck, self.pull_card_from_pile_top])
+
+        this_card = pull_card_function()
+        # ==================================================
+
         player.cards_in_hand.append(this_card)
         player.sum_hand_points()
 
@@ -450,6 +461,24 @@ class Round():
 
         return this_card
 
+    def pull_card_from_pile_top(self):
+        n_cards = len(self.pile_top_cards)
 
+        accessible_cards = self.pile_top_cards
+        if 1 == n_cards:
+            return self.pile_top_cards[0]
+        elif 2 == n_cards:
+            pass
+        else:
+            if not cards_same_rank(self.pile_top_cards):
+                # only outer cards acessible in case of streak
+                sorted_pile_top_cards = sort_cards(self.pile_top_cards)
+                accessible_cards = [sorted_pile_top_cards[0], sorted_pile_top_cards[-1]]
+            else:
+                accessible_cards = self.pile_top_cards
 
+        # ======== here we will need to introduce strategy of best card to choose ============
+        this_card = np.random.choice(accessible_cards)
+        # =====================================
 
+        return this_card

@@ -53,12 +53,15 @@ def card_to_suite(card):
 def card_to_rank(card):
     '''Returns the rank of the card in str
 
-    Note that possible values are 'A', '2', '3', ... '10', 'J', 'Q', 'K' and JOKER_RANK
+    Note that possible values are 'A', '2', '3', ... '10', 'J', 'Q', 'K' and JOKER_RANK1, JOKER_RANK2
 
     :param card: str.
     :return: str.
     '''
     return card[:-1]
+
+def cards_same_rank(these_cards):
+    return 1 == len(np.unique(list(map(card_to_rank, these_cards))))
 
 
 def define_deck(play_jokers=True):
