@@ -78,7 +78,7 @@ def define_deck(play_jokers=True):
 
     if play_jokers:
         deck.append('{}{}'.format(JOKER_RANK, JOKER_SUITE1))
-        deck.append('{}{}'.format(JOKER_RANK, JOKER_SUITE1))
+        deck.append('{}{}'.format(JOKER_RANK, JOKER_SUITE2))
 
     return deck
 

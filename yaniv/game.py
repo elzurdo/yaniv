@@ -33,6 +33,7 @@ class Player():
         self.pile_pull_strategy = {"highest_card_value_to_pull": np.random.randint(1, 6)}
         self.yaniv_strategy = yaniv_strategy
         self.starts_round = False
+        self.unknown_cards = []
 
     def sum_hand_points(self):
         '''Calculates the sum of point in a hand
@@ -41,6 +42,19 @@ class Player():
         self.hand_points = 0
         for card in self.cards_in_hand:
             self.hand_points += card_to_value(card)
+
+    def add_cards_to_unknown(self, cards):
+        self.unknown_cards = self.unknown_cards + list(cards)
+
+    def remove_cards_from_unknown(self, cards):
+        self.unknown_cards = list(set(self.unknown_cards) - set(cards))
+
+    def knowledgewise_assign_card_to_player(self, other_player_name, card):
+        self.other_players_known_cards[other_player_name].append(card)
+
+    def knowledgewise_drop_cards_from_player(self, other_player_name, cards):
+        remaining_cards = list(set(self.other_players_known_cards[other_player_name]) - set(cards))
+        self.other_players_known_cards[other_player_name] = remaining_cards
 
 class Game():
     def __init__(self, player_names, end_game_score=None, assaf_penalty=None, play_jokers=True, verbose=1, seed=None):
@@ -256,16 +270,26 @@ class Round():
         :return:
         '''
 
+        full_deck = self.round_deck.copy()
+
         for name, player in self.players.items():
+            player.add_cards_to_unknown(full_deck)
+
             self._seeding()
             # assigning randomised selected cards to Player
             player.cards_in_hand = np.random.choice(self.round_deck, size=num_cards, replace=False)
             # calculating points in a hand of Player
             player.sum_hand_points()
+            player.remove_cards_from_unknown(player.cards_in_hand)
 
             # Deleting selected cards from the round's deck
             for card in player.cards_in_hand:
                 self.round_deck.remove(card)
+
+        card = np.random.choice(self.round_deck, size=1, replace=False)
+        self.pile_top_cards = card
+        self.round_deck.remove(card)
+        self.update_players_knowledge(None) # `card` does not belong to anyone
 
     # TODO: make tidier, hopefully without using pandas
     def get_player_order(self):
@@ -398,6 +422,13 @@ class Round():
         if not players_ordered:
             players_ordered = self.get_player_order()
 
+            # each player accounts for other players hands. In beginning no knowledge
+            for name_i, player_i in players_ordered.items():
+                player_i.other_players_known_cards = {}
+                for name_j, player_j in players_ordered.items():
+                    if name_i != name_j:
+                        player_i.other_players_known_cards[name_j] = []
+
         #print('playing order: ', ', '.join(list(players_ordered.keys())))
 
         for name, player in players_ordered.items():
@@ -419,6 +450,9 @@ class Round():
                 else:
                     self.throw_cards_to_pile(name)
                     self.pull_card(name)
+                    self.pile_top_cards = self.pile_top_cards_this_turn
+
+                    self.update_players_knowledge(name)
 
 
 
@@ -441,14 +475,15 @@ class Round():
         player.cards_in_hand = [this_card for this_card in player.cards_in_hand if this_card not in cards_to_throw]
 
         self.cards_thrown += cards_to_throw
-        self.pile_top_cards = cards_to_throw
+        self.pile_top_cards_this_turn = cards_to_throw
 
     def pull_card(self, name):
         player = self.players[name]
 
+        self.chosen_from_pile_top = None
+
         # ======== need to devise better strategy ===========
         pull_card_function = np.random.choice([self.pull_card_from_deck, self.pull_card_from_pile_top])
-
         this_card = pull_card_function()
         # ==================================================
 
@@ -480,5 +515,18 @@ class Round():
         # ======== here we will need to introduce strategy of best card to choose ============
         this_card = np.random.choice(accessible_cards)
         # =====================================
+        self.pile_top_cards = list(set(self.pile_top_cards) - set([this_card]))
+        self.chosen_from_pile_top = this_card
 
         return this_card
+
+    def update_players_knowledge(self, turn_player_name):
+        disposed_cards = set(self.pile_top_cards)
+
+        for player_name, player in self.players.items():
+            player.remove_cards_from_unknown(disposed_cards)
+
+            if (player_name != turn_player_name) & (turn_player_name in self.players.keys()):
+                player.knowledgewise_drop_cards_from_player(turn_player_name, self.pile_top_cards)
+                if self.chosen_from_pile_top:
+                    player.knowledgewise_assign_card_to_player(turn_player_name, self.chosen_from_pile_top)
