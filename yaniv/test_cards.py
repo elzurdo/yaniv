@@ -1,3 +1,5 @@
+# py.test
+
 from unittest import TestCase
 
 from cards import (rank_to_value,

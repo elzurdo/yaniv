@@ -90,11 +90,14 @@ class Game():
         self.generate_players(player_names)
         self.deck = define_deck(play_jokers=play_jokers)
         print(self.deck)
+        self.game_output = {}
 
     def play(self):
         self.initiate_players_status()
 
         self.play_game()
+
+        return self.game_output
 
     def _seeding(self):
         if self.seed:
@@ -183,15 +186,15 @@ class Game():
             if self.verbose:
                 print('=' * 20)
             round_number += 1
+            self.game_output[round_number] = {}
             if self.verbose >= 1:
                 print('Round: {:,}'.format(round_number))
 
             # Declaring Round object and playing a round
             # TODO: make card_num_2_max_value dyanmic
 
-
             self.round = Round(players, self.deck, assaf_penalty=self.assaf_penalty,
-                               card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed)
+                               card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed, round_output=self.game_output[round_number])
             self.round.play()
 
             #"""
@@ -199,10 +202,14 @@ class Game():
             if self.seed:
                 self.seed += 1
             # ====== player score updating ==============
+            self.game_output[round_number]['end'] = {}
             for name, player in players.items():
                 # hand points go into score.
                 # If Yaniv was successful the caller gets 0 points (otherwise the original hand plus the assaf_penalty
                 # All other players get hand_points (including if one was an Assafer)
+                self.game_output[round_number]['end'][name] = {}
+                self.game_output[round_number]['end'][name]['gained_points'] = player.hand_points
+
                 player.game_score += player.hand_points
 
                 # Jackpot!
@@ -210,9 +217,14 @@ class Game():
                 if player.game_score == 100:
                     player.game_score = 50
                     print("Lucky {}! Aggregated 100 points reduced to 50".format(name))
+                    self.game_output[round_number]['end']['lucky_50'] = 1
                 elif player.game_score == 200:
                     print("Lucky {}! Aggregated 200 points reduced to 150".format(name))
                     player.game_score = 150
+                    self.game_output[round_number]['end']['lucky_150'] = 1
+
+                self.game_output[round_number]['end'][name]['points_conclusion'] = player.game_score
+
 
                 if self.verbose:
                     print(player.name, player.hand_points, [card_to_pretty(card) for card in player.cards_in_hand], player.game_score)
@@ -236,7 +248,7 @@ class Game():
             print("Everybody loses ... ({} players left)".format(len(players)))
 
 class Round():
-    def __init__(self, players, deck, card_num_to_max_value=None, assaf_penalty=30, seed=4, verbose=0, do_stats=False):
+    def __init__(self, players, deck, card_num_to_max_value=None, assaf_penalty=30, seed=4, verbose=0, do_stats=False, round_output=None):
         self.seed = seed
         self.verbose = verbose
         self.assaf_penalty = assaf_penalty
@@ -247,7 +259,8 @@ class Round():
 
         self.players = players
 
-        self.meta = {}  # meta data for logging
+        #self.meta = {}  # meta data for logging
+        self.round_output = round_output
 
     def play(self):
         # round starts with a full deck
@@ -272,12 +285,14 @@ class Round():
 
         full_deck = self.round_deck.copy()
 
+        self.round_output['start'] = {}
         for name, player in self.players.items():
             player.add_cards_to_unknown(full_deck)
 
             self._seeding()
             # assigning randomised selected cards to Player
             player.cards_in_hand = np.random.choice(self.round_deck, size=num_cards, replace=False)
+            self.round_output['start'][name] = list(player.cards_in_hand)
             # calculating points in a hand of Player
             player.sum_hand_points()
             player.remove_cards_from_unknown(player.cards_in_hand)
@@ -288,6 +303,7 @@ class Round():
 
         card = np.random.choice(self.round_deck, size=1, replace=False)
         self.pile_top_cards = card
+        self.round_output['start']['pile_top'] = card[0]
         self.round_deck.remove(card)
         self.update_players_knowledge(None) # `card` does not belong to anyone
 
@@ -387,8 +403,11 @@ class Round():
                     assafed = True
                     assafers.append(name)
 
+
         if assafed:
             assafer_name = assafers[0]  # currently using the first indexed as the Assafer
+            self.turn_output['assafed_by'] = assafer_name
+            self.round_output['winner'] = assafer_name
             if self.verbose:
                 print('ASSAF!')
                 print('{} Assafed by: {} (hand of {})'.format(name_yaniv, assafers[0],
@@ -409,13 +428,14 @@ class Round():
             self.players[name_yaniv].hand_points = 0
             # ... and gets to start the next round.
             yaniv_player.starts_round = True
+            self.round_output['winner'] = name_yaniv
 
         """
         if self.collect_meta:
             self.meta[turn_number]["hand_points_end"] = player.hand_points
         """
 
-    def play_round(self, players_ordered=None):
+    def play_round(self, players_ordered=None, turn=0):
         # flag to finish round. True: keep playing, False: end of round.
         yaniv_declared = False
 
@@ -432,6 +452,10 @@ class Round():
         #print('playing order: ', ', '.join(list(players_ordered.keys())))
 
         for name, player in players_ordered.items():
+            turn += 1
+            self.round_output[turn] = {}
+            self.turn_output = self.round_output[turn]
+            self.turn_output['name'] = name
             # self._log_meta_data(player)
             if not yaniv_declared:
                 if player.hand_points <= YANIV_LIMIT:
@@ -443,6 +467,7 @@ class Round():
                 ## yaniv_declared = np.random.choice([True, False], size=1, p=[0.4, 0.6])[0]
                 # -----------------------------
                 if yaniv_declared:
+                    self.turn_output['yaniv_call'] = 1
                     # round ends
                     self.round_summary(name)
                     return None
@@ -460,7 +485,7 @@ class Round():
             # at this stage we did a full "circle around the table",
             # but did not conclude with a Yaniv declaration. We will go for another round
             # perhaps there is a better way of doing this loop.
-            self.play_round(players_ordered=players_ordered)
+            self.play_round(players_ordered=players_ordered, turn=turn)
 
     def throw_cards_to_pile(self, name):
         player = self.players[name]
@@ -474,8 +499,10 @@ class Round():
         # updating player hand cards
         player.cards_in_hand = [this_card for this_card in player.cards_in_hand if this_card not in cards_to_throw]
 
+
         self.cards_thrown += cards_to_throw
         self.pile_top_cards_this_turn = cards_to_throw
+        self.turn_output['throws'] = cards_to_throw
 
     def pull_card(self, name):
         player = self.players[name]
@@ -487,16 +514,20 @@ class Round():
         this_card = pull_card_function()
         # ==================================================
 
+        self.turn_output['pulls'] = this_card
         player.cards_in_hand.append(this_card)
         player.sum_hand_points()
 
     def pull_card_from_deck(self):
+        self.turn_output['pull_source'] = 'deck'
         this_card = np.random.choice(self.round_deck, size=1, replace=False)[0]
         self.round_deck.remove(this_card)
+
 
         return this_card
 
     def pull_card_from_pile_top(self):
+        self.turn_output['pull_source'] = 'pile'
         n_cards = len(self.pile_top_cards)
 
         accessible_cards = self.pile_top_cards
@@ -517,6 +548,7 @@ class Round():
         # =====================================
         self.pile_top_cards = list(set(self.pile_top_cards) - set([this_card]))
         self.chosen_from_pile_top = this_card
+
 
         return this_card
 
