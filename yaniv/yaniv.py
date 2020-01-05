@@ -742,7 +742,7 @@ class Round():
             sr_cards_to_choose_from = pd.Series(list(map(lambda x: card_to_score_all[x], self.cards_to_choose_from)),
                                                 self.cards_to_choose_from)
 
-            if sr_cards_to_choose_from.min() <= highest_value_to_choose:  # pikcing up from throw pile
+            if sr_cards_to_choose_from.min() <= highest_value_to_choose:  # picking up from throw pile
                 chosen_card = [sr_cards_to_choose_from.sort_values().index[0]]
                 pull_source = "pile"
                 # print('pull from pile: {}'.format(chosen_card))

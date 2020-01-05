@@ -94,6 +94,12 @@ python 3
 * scipy  
 * pandas
 
+# Testing
+Run bash command 
+```
+py.test
+```
+
 
 # Credits 
 Image credit: Barak Edry from his excellent [App Store game of Yaniv](https://itunes.apple.com/gb/app/yaniv/id397614908?mt=8)
