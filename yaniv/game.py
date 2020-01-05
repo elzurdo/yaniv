@@ -79,7 +79,7 @@ class Game():
         else:
             self.assaf_penalty = ASSAF_PENALTY
 
-        if assaf_penalty:
+        if end_game_score:
             self.end_game_score = end_game_score
         else:
             self.end_game_score = END_GAME_SCORE
@@ -479,8 +479,6 @@ class Round():
 
                     self.update_players_knowledge(name)
 
-
-
         if not yaniv_declared:
             # at this stage we did a full "circle around the table",
             # but did not conclude with a Yaniv declaration. We will go for another round
@@ -510,7 +508,16 @@ class Round():
         self.chosen_from_pile_top = None
 
         # ======== need to devise better strategy ===========
-        pull_card_function = np.random.choice([self.pull_card_from_deck, self.pull_card_from_pile_top])
+        #pull_card_function = np.random.choice([self.pull_card_from_deck, self.pull_card_from_pile_top])
+
+        card_values = [card_to_value(card) for card in self.pile_top_cards]
+        idx_lowest = np.array(card_values).argmin()
+
+        if player.pile_pull_strategy['highest_card_value_to_pull'] >= card_values[idx_lowest]:
+            pull_card_function = self.pull_card_from_pile_top
+        else:
+            pull_card_function = self.pull_card_from_deck
+
         this_card = pull_card_function()
         # ==================================================
 
@@ -532,12 +539,14 @@ class Round():
 
         accessible_cards = self.pile_top_cards
         if 1 == n_cards:
+            self.chosen_from_pile_top = self.pile_top_cards[0]
             return self.pile_top_cards[0]
         elif 2 == n_cards:
+            # both card are accessible
             pass
         else:
             if not cards_same_rank(self.pile_top_cards):
-                # only outer cards acessible in case of streak
+                # only outer cards accessible in case of streak
                 sorted_pile_top_cards = sort_cards(self.pile_top_cards)
                 accessible_cards = [sorted_pile_top_cards[0], sorted_pile_top_cards[-1]]
             else:
@@ -548,7 +557,6 @@ class Round():
         # =====================================
         self.pile_top_cards = list(set(self.pile_top_cards) - set([this_card]))
         self.chosen_from_pile_top = this_card
-
 
         return this_card
 
