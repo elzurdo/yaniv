@@ -16,6 +16,7 @@ from stats import card_number_to_max_card_value_to_declare_yaniv
 ASSAF_PENALTY = 30
 END_GAME_SCORE = 200
 MAX_ROUNDS = 100
+MAX_TURNS = 100
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
 
@@ -480,6 +481,10 @@ class Round():
                     self.update_players_knowledge(name)
 
         if not yaniv_declared:
+            if turn >= MAX_TURNS:
+                print(f'Reached {MAX_TURNS} turns, terminating round')
+                self.turn_output['max_turns'] = 1
+                return None
             # at this stage we did a full "circle around the table",
             # but did not conclude with a Yaniv declaration. We will go for another round
             # perhaps there is a better way of doing this loop.
@@ -570,3 +575,4 @@ class Round():
                 player.knowledgewise_drop_cards_from_player(turn_player_name, self.pile_top_cards)
                 if self.chosen_from_pile_top:
                     player.knowledgewise_assign_card_to_player(turn_player_name, self.chosen_from_pile_top)
+
