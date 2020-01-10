@@ -529,6 +529,7 @@ class Round():
         self.turn_output['pulls'] = this_card
         player.cards_in_hand.append(this_card)
         player.sum_hand_points()
+        player.remove_cards_from_unknown([this_card])
 
     def pull_card_from_deck(self):
         self.turn_output['pull_source'] = 'deck'
