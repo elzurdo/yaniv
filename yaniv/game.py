@@ -312,7 +312,6 @@ class Round():
 
         card = np.random.choice(self.round_deck, size=1, replace=False)
         self.pile_top_cards = card
-        self.round_output['start']['pile_top'] = card[0]
         self.round_deck.remove(card)
         self.update_players_knowledge(None) # `card` does not belong to anyone
 
@@ -471,6 +470,7 @@ class Round():
             self.round_output[turn] = {}
             self.turn_output = self.round_output[turn]
             self.turn_output['name'] = name
+            self.turn_output['pile_top_accessible'] = self.pile_top_accessible_cards()
             # self._log_meta_data(player)
             if not yaniv_declared:
                 if player.hand_points <= YANIV_LIMIT:
@@ -503,6 +503,16 @@ class Round():
             # but did not conclude with a Yaniv declaration. We will go for another round
             # perhaps there is a better way of doing this loop.
             self.play_round(players_ordered=players_ordered, turn=turn)
+
+    def pile_top_accessible_cards(self):
+        pile_top_cards_accessible = self.pile_top_cards
+        if len(pile_top_cards_accessible) > 2:
+            if not cards_same_rank(pile_top_cards_accessible):
+                # only outer cards accessible in case of streak
+                cards_sorted = sort_cards(pile_top_cards_accessible)
+                pile_top_cards_accessible = [cards_sorted[0], cards_sorted[-1]]
+
+        return pile_top_cards_accessible
 
     def throw_cards_to_pile(self, name):
         player = self.players[name]
@@ -561,6 +571,8 @@ class Round():
         self.turn_output['pull_source'] = 'pile'
         n_cards = len(self.pile_top_cards)
 
+
+
         accessible_cards = self.pile_top_cards
         if 1 == n_cards:
             self.chosen_from_pile_top = self.pile_top_cards[0]
@@ -569,13 +581,7 @@ class Round():
             # both card are accessible
             pass
         else:
-            if not cards_same_rank(self.pile_top_cards):
-                # only outer cards accessible in case of streak
-                sorted_pile_top_cards = sort_cards(self.pile_top_cards)
-                accessible_cards = [sorted_pile_top_cards[0], sorted_pile_top_cards[-1]]
-            else:
-                accessible_cards = self.pile_top_cards
-
+            accessible_cards = self.pile_top_accessible_cards()
         # ======== here we will need to introduce strategy of best card to choose ============
         this_card = np.random.choice(accessible_cards)
         # =====================================
