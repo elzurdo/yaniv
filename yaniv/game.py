@@ -471,6 +471,7 @@ class Round():
             self.turn_output = self.round_output[turn]
             self.turn_output['name'] = name
             self.turn_output['pile_top_accessible'] = self.pile_top_accessible_cards()
+            self.turn_output[name] = list(player.cards_in_hand) # this might be redundant information
             # self._log_meta_data(player)
             if not yaniv_declared:
                 if player.hand_points <= YANIV_LIMIT:
