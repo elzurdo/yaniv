@@ -1,0 +1,21 @@
+\documentclass[10pt]{article}
+\usepackage[usenames]{color} %used for font color
+\usepackage{amssymb} %maths
+\usepackage{amsmath} %maths
+\usepackage[utf8]{inputenc} %useful to type directly diacritic characters
+\begin{document}
+Probability that player $i$ has the lowest hand value $H_i$:  \\
+(1) $P_{i}(H_i = \mathrm{min}\{H\}) = \Pi_{j!=i}^{N} P(H_j > H_i)$
+\\ \\
+Probability that player $j$ has a higher hand than player $i$  \\
+(2) $P(H_j>H_i) = ?$
+\\ \\
+Rainman equation:\\
+Probability that player $i$ has the lowest hand value $H_i$\\ given the number of cards in hand of each player $n_{\mathrm{cards}}$ and known cards of $j$ by $i$ $C_{j,i}$
+\\
+(3) $P_{i}(H_i = \mathrm{min}\{H\}) = \Pi_{j!=i}^{N} P(H_j > H_i|n_{\mathrm{cards}}, C_{j,i})$
+\\
+Mapping $T(n_{\mathrm{cards} })$ that is the threshold minimum possible given the number of cards in hand.\\ $P(H_j > H_i|n_{\mathrm{cards}})$
+\\
+(4) $P(H_j > H_i|n_{\mathrm{cards}}, C_{j,i})=\\ P(\mathrm{at least one card above T}) + P(\mathrm{all below })$ 
+\end{document}

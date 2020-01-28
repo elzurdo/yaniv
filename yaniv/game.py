@@ -8,23 +8,31 @@ from cards import (define_deck, card_to_pretty,
                    sort_card_combos,
                    card_to_value,
                    cards_same_rank,
-                   sort_cards
+                   sort_cards,
                    )
-from stats import card_number_to_max_card_value_to_declare_yaniv
+
+from stats import (card_number_to_max_card_value_to_declare_yaniv,
+                   calculate_prob_all_cards_under_thresh,
+                   calculate_prob_ht_gt_hi
+                   )
 
 
 ASSAF_PENALTY = 30
 END_GAME_SCORE = 200
 MAX_ROUNDS = 100
+MAX_TURNS = 40
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
+def is_smaller_binary(value, thresh=None):
+    return int(value <= thresh)
 
 # TODO: design and implement different throw_strategy
 # TODO: design and implement different yaniv_strategy ('always' (i.e, 7), 'only below 4', 'by statistics')
 # TODO: design and implement different pile_pull_strategy
 # TODO: figure out and implement how to change strategy as game progresses (so to maximise utility)
 class Player():
-    def __init__(self, name, throw_strategy='highest_card', yaniv_strategy='always', seed=None):
+    def __init__(self, name, throw_strategy='highest_card', yaniv_strategy='not_always', prob_success_thresh=0.2, seed=None):
+        assert yaniv_strategy in ['always', 'not_always']
         if seed:
             np.random.seed(seed)
         self.name = name
@@ -32,6 +40,7 @@ class Player():
         self.throw_strategy = throw_strategy
         self.pile_pull_strategy = {"highest_card_value_to_pull": np.random.randint(1, 6)}
         self.yaniv_strategy = yaniv_strategy
+        self.prob_successful_yaniv_thresh = prob_success_thresh
         self.starts_round = False
         self.unknown_cards = []
 
@@ -57,7 +66,8 @@ class Player():
         self.other_players_known_cards[other_player_name] = remaining_cards
 
 class Game():
-    def __init__(self, player_names, end_game_score=None, assaf_penalty=None, play_jokers=True, verbose=1, seed=None):
+    def __init__(self, player_names, end_game_score=None, assaf_penalty=None, play_jokers=True, do_stats=False,
+                 verbose=1, seed=None):
         '''
         verbose:
         0 - display player names, winner his/her score
@@ -79,17 +89,19 @@ class Game():
         else:
             self.assaf_penalty = ASSAF_PENALTY
 
-        if assaf_penalty:
+        if end_game_score:
             self.end_game_score = end_game_score
         else:
             self.end_game_score = END_GAME_SCORE
 
         self.play_jokers = play_jokers
         self.verbose = verbose
+        self.do_stats = do_stats
 
         self.generate_players(player_names)
         self.deck = define_deck(play_jokers=play_jokers)
-        print(self.deck)
+        if 1:
+            print(f'Deck of {len(self.deck)} cards\n{self.deck}')
         self.game_output = {}
 
     def play(self):
@@ -121,8 +133,8 @@ class Game():
             player = Player(name, seed=self.seed)
             player.id = idx
             self.all_players.append(player)
-            print(name)
-            print('Pile pick strategy:\npicks if min pile top min value  <= {}'.format(player.pile_pull_strategy['highest_card_value_to_pull']))
+            print()
+            print(f'{name} strategy: picks if min pile top min value  <= {player.pile_pull_strategy["highest_card_value_to_pull"]}')
             #print("Highest value card will pick from pile: {}".format(player_.pull_strategy["highest_card_value_to_pull"]))
 
             print("-" * 10)
@@ -194,7 +206,8 @@ class Game():
             # TODO: make card_num_2_max_value dyanmic
 
             self.round = Round(players, self.deck, assaf_penalty=self.assaf_penalty,
-                               card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed, round_output=self.game_output[round_number])
+                               card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed,
+                               round_output=self.game_output[round_number], do_stats=self.do_stats)
             self.round.play()
 
             #"""
@@ -242,7 +255,7 @@ class Game():
             winner = players[list(players.keys())[0]]
             print("{} is the winner with {:,} points".format(winner.name, winner.game_score))
         elif round_number == MAX_ROUNDS:
-            print("Reached max rounds. Left standing: {}".format(', '.join([player for player in players])))
+            print("Round {} reached max rounds. Left standing: {}".format(round_number, ', '.join([player for player in players])))
         else:
             # Case of 0 players left (double-or-more knockout case)
             print("Everybody loses ... ({} players left)".format(len(players)))
@@ -303,7 +316,6 @@ class Round():
 
         card = np.random.choice(self.round_deck, size=1, replace=False)
         self.pile_top_cards = card
-        self.round_output['start']['pile_top'] = card[0]
         self.round_deck.remove(card)
         self.update_players_knowledge(None) # `card` does not belong to anyone
 
@@ -330,6 +342,10 @@ class Round():
                 starting_player_name = name
                 idx_starting = idx
 
+        if starting_player_name is None: # e.g, if the Assafer loses game because of points
+            idx_starting = 0
+            starting_player_name = list(self.players.keys())[idx_starting]
+
         if self.verbose:
             print('Player starting the round: {}'.format(starting_player_name))
 
@@ -346,6 +362,7 @@ class Round():
         return players_ordered
 
     # Todo: add probabalistic approaches Issue #3
+    # Todo: self.do_stats should be related to game strategy
     def decide_declare_yaniv(self, name):
         '''Returns Player boolean decision if to declare Yaniv
 
@@ -355,12 +372,20 @@ class Round():
         :param name: str. Name of Player considering declaring
         :return: bool. True: declare Yaniv (end round), False: continue the round play
         '''
-        if (self.verbose > 1) and self.do_stats:
-            self.prob_lowest_hand(name)
+
+        prob_successful_yaniv = None
+        if self.do_stats:
+            prob_successful_yaniv = self.prob_lowest_hand(name)
+            self.turn_output['yaniv_success_prob'] = prob_successful_yaniv
 
         player = self.players[name]
-        if 'always' == player.yaniv_strategy:
+        if ('always' == player.yaniv_strategy) or (prob_successful_yaniv is None):
             return True
+        else:
+            if prob_successful_yaniv >= player.prob_successful_yaniv_thresh:
+                return True
+
+        return False
         
     # TODO: The Assaf should be the Assafer with the lowest value. If two equally lowest choose randomly
     # TODO: deal with collecting meta data, and flag self.collect_meta
@@ -456,6 +481,11 @@ class Round():
             self.round_output[turn] = {}
             self.turn_output = self.round_output[turn]
             self.turn_output['name'] = name
+            self.turn_output['pile_top_accessible'] = list(self.pile_top_accessible_cards())
+            #self.turn_output[name] = list(player.cards_in_hand) # this might be redundant information
+            for name_j, player_j in players_ordered.items():
+                self.turn_output[f'{name_j}_ncards'] = len(list(player_j.cards_in_hand))
+                self.turn_output[f'{name_j}_cards'] = list(player_j.cards_in_hand)
             # self._log_meta_data(player)
             if not yaniv_declared:
                 if player.hand_points <= YANIV_LIMIT:
@@ -479,13 +509,25 @@ class Round():
 
                     self.update_players_knowledge(name)
 
-
-
         if not yaniv_declared:
+            if turn >= MAX_TURNS:
+                print(f'Reached {MAX_TURNS} turns, terminating round')
+                self.turn_output['max_turns'] = 1
+                return None
             # at this stage we did a full "circle around the table",
             # but did not conclude with a Yaniv declaration. We will go for another round
             # perhaps there is a better way of doing this loop.
             self.play_round(players_ordered=players_ordered, turn=turn)
+
+    def pile_top_accessible_cards(self):
+        pile_top_cards_accessible = self.pile_top_cards
+        if len(pile_top_cards_accessible) > 2:
+            if not cards_same_rank(pile_top_cards_accessible):
+                # only outer cards accessible in case of streak
+                cards_sorted = sort_cards(pile_top_cards_accessible)
+                pile_top_cards_accessible = [cards_sorted[0], cards_sorted[-1]]
+
+        return pile_top_cards_accessible
 
     def throw_cards_to_pile(self, name):
         player = self.players[name]
@@ -504,20 +546,36 @@ class Round():
         self.pile_top_cards_this_turn = cards_to_throw
         self.turn_output['throws'] = cards_to_throw
 
+    # TODO: devise better strategies for pulling cards
     def pull_card(self, name):
         player = self.players[name]
 
         self.chosen_from_pile_top = None
 
         # ======== need to devise better strategy ===========
-        pull_card_function = np.random.choice([self.pull_card_from_deck, self.pull_card_from_pile_top])
+        #pull_card_function = np.random.choice([self.pull_card_from_deck, self.pull_card_from_pile_top])
+
+        card_values = [card_to_value(card) for card in self.pile_top_cards]
+        idx_lowest = np.array(card_values).argmin()
+
+        if player.pile_pull_strategy['highest_card_value_to_pull'] >= card_values[idx_lowest]:
+            pull_card_function = self.pull_card_from_pile_top
+        else:
+            pull_card_function = self.pull_card_from_deck
+
+        # overriding previous decision, because the deck is empty ...
+        if len(self.round_deck) == 0:
+            pull_card_function = self.pull_card_from_pile_top
+
         this_card = pull_card_function()
         # ==================================================
 
         self.turn_output['pulls'] = this_card
         player.cards_in_hand.append(this_card)
         player.sum_hand_points()
+        player.remove_cards_from_unknown([this_card])
 
+    # TODO: deal with situation where pile is empty (deck only? might cause infinite loop)
     def pull_card_from_deck(self):
         self.turn_output['pull_source'] = 'deck'
         this_card = np.random.choice(self.round_deck, size=1, replace=False)[0]
@@ -530,25 +588,22 @@ class Round():
         self.turn_output['pull_source'] = 'pile'
         n_cards = len(self.pile_top_cards)
 
+
+
         accessible_cards = self.pile_top_cards
         if 1 == n_cards:
+            self.chosen_from_pile_top = self.pile_top_cards[0]
             return self.pile_top_cards[0]
         elif 2 == n_cards:
+            # both card are accessible
             pass
         else:
-            if not cards_same_rank(self.pile_top_cards):
-                # only outer cards acessible in case of streak
-                sorted_pile_top_cards = sort_cards(self.pile_top_cards)
-                accessible_cards = [sorted_pile_top_cards[0], sorted_pile_top_cards[-1]]
-            else:
-                accessible_cards = self.pile_top_cards
-
+            accessible_cards = self.pile_top_accessible_cards()
         # ======== here we will need to introduce strategy of best card to choose ============
         this_card = np.random.choice(accessible_cards)
         # =====================================
         self.pile_top_cards = list(set(self.pile_top_cards) - set([this_card]))
         self.chosen_from_pile_top = this_card
-
 
         return this_card
 
@@ -562,3 +617,62 @@ class Round():
                 player.knowledgewise_drop_cards_from_player(turn_player_name, self.pile_top_cards)
                 if self.chosen_from_pile_top:
                     player.knowledgewise_assign_card_to_player(turn_player_name, self.chosen_from_pile_top)
+
+    def prob_lowest_hand(self, name):
+        player_i = self.players[name]
+        hand_sum_i = player_i.hand_points  # was hand_points
+
+        cards_unknown = player_i.unknown_cards
+        cards_unknown_values = [card_to_value(card) for card in cards_unknown]
+        #print(cards_unknown_values)
+
+        prob_lowest = 1.
+        for name_j, player_j in self.players.items():
+            if name_j != name:
+                prob_Hi_lt_Hj = self.calculate_prob_Hi_lt_Hj(hand_sum_i, player_j, cards_unknown_values)
+                prob_lowest *= prob_Hi_lt_Hj
+
+        if self.verbose >= 3:
+            print('~' * 10)
+            print(hand_sum_i, player_i.cards_in_hand)
+            print(f"The probability for {name} to make a successful Yaniv decleration is: {100. * prob_lowest:0.1f}%")
+        return prob_lowest
+
+    def calculate_prob_Hi_lt_Hj(self, hand_sum_i, player_j, cards_unknown_values): #, hand_points, name_other, cards_unknown_values): # was calculate_prob_yaniv_better_than_other
+
+        n_cards =len(player_j.cards_in_hand) # was n_cards_other
+        max_value_to_win = self.card_num_to_max_value[n_cards] # was thresh
+
+        #n_cards_other = len(self.players[name_other].cards_in_hand)  # number of cards of other player
+        #thresh = self.card_num_2_max_value[n_cards_other]  # maximum value other can have to declare yaniv
+
+
+        if self.verbose >= 3:
+            print('~' * 10)
+            print(f"Given {player_j.name} has {n_cards} cards, the max threshold is {max_value_to_win} (i.e, if has above this value, no chance to Assaf)")
+
+
+        cards_unknown_smaller_than_max_bool = list(map(lambda x: is_smaller_binary(x, thresh=max_value_to_win), cards_unknown_values))
+
+        # Calculating the probability that all cards in other player's hand is smaller than the max thresh possible to Yaniv
+        prob_all_cards_under_thresh = calculate_prob_all_cards_under_thresh(n_cards, cards_unknown_smaller_than_max_bool, verbose=self.verbose - 2)
+
+        cards_unknown_values_small = [value for value in cards_unknown_values if value <=max_value_to_win]
+
+        # Given all cards are under the thresh -- what is the probability of NOT Assafing the Yaniv declaration?
+        prob_hj_gt_hi = calculate_prob_ht_gt_hi(hand_sum_i, cards_unknown_values_small, n_cards) # was prob_above_yaniv_given_all_below_threshold
+
+        prob_hi_lt_jh = (1. - prob_all_cards_under_thresh) +  prob_hj_gt_hi * prob_all_cards_under_thresh  # was prob_yaniv_better_than_other
+
+        #prob_yaniv_better_than_other = (1 - prob_all_cards_under_thresh) + prob_above_yaniv_given_all_below_threshold * prob_all_cards_under_thresh
+
+        if self.verbose >= 3:
+            print("p({} cards sum > yaniv| all {} cards <= {} )=%{:0.1f}".format(player_j.name, player_j.name, max_value_to_win,
+                                                                                 100. * prob_hj_gt_hi))
+            print(
+                "Meaning the probability of Successful Yaniv (=NOT being Assafed by {}) is: %{:0.2f}".format(player_j.name,
+                                                                                                             prob_hi_lt_jh * 100.))
+
+        return prob_hj_gt_hi
+
+
