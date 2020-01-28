@@ -20,7 +20,7 @@ from stats import (card_number_to_max_card_value_to_declare_yaniv,
 ASSAF_PENALTY = 30
 END_GAME_SCORE = 200
 MAX_ROUNDS = 100
-MAX_TURNS = 100
+MAX_TURNS = 40
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
 def is_smaller_binary(value, thresh=None):
@@ -31,7 +31,7 @@ def is_smaller_binary(value, thresh=None):
 # TODO: design and implement different pile_pull_strategy
 # TODO: figure out and implement how to change strategy as game progresses (so to maximise utility)
 class Player():
-    def __init__(self, name, throw_strategy='highest_card', yaniv_strategy='not_always', prob_success_thresh=0.8, seed=None):
+    def __init__(self, name, throw_strategy='highest_card', yaniv_strategy='not_always', prob_success_thresh=0.2, seed=None):
         assert yaniv_strategy in ['always', 'not_always']
         if seed:
             np.random.seed(seed)
@@ -66,7 +66,8 @@ class Player():
         self.other_players_known_cards[other_player_name] = remaining_cards
 
 class Game():
-    def __init__(self, player_names, end_game_score=None, assaf_penalty=None, play_jokers=True, verbose=1, seed=None):
+    def __init__(self, player_names, end_game_score=None, assaf_penalty=None, play_jokers=True, do_stats=False,
+                 verbose=1, seed=None):
         '''
         verbose:
         0 - display player names, winner his/her score
@@ -95,10 +96,12 @@ class Game():
 
         self.play_jokers = play_jokers
         self.verbose = verbose
+        self.do_stats = do_stats
 
         self.generate_players(player_names)
         self.deck = define_deck(play_jokers=play_jokers)
-        print(self.deck)
+        if 1:
+            print(f'Deck of {len(self.deck)} cards\n{self.deck}')
         self.game_output = {}
 
     def play(self):
@@ -130,8 +133,8 @@ class Game():
             player = Player(name, seed=self.seed)
             player.id = idx
             self.all_players.append(player)
-            print(name)
-            print('Pile pick strategy:\npicks if min pile top min value  <= {}'.format(player.pile_pull_strategy['highest_card_value_to_pull']))
+            print()
+            print(f'{name} strategy: picks if min pile top min value  <= {player.pile_pull_strategy["highest_card_value_to_pull"]}')
             #print("Highest value card will pick from pile: {}".format(player_.pull_strategy["highest_card_value_to_pull"]))
 
             print("-" * 10)
@@ -203,7 +206,8 @@ class Game():
             # TODO: make card_num_2_max_value dyanmic
 
             self.round = Round(players, self.deck, assaf_penalty=self.assaf_penalty,
-                               card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed, round_output=self.game_output[round_number])
+                               card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed,
+                               round_output=self.game_output[round_number], do_stats=self.do_stats)
             self.round.play()
 
             #"""
@@ -251,13 +255,13 @@ class Game():
             winner = players[list(players.keys())[0]]
             print("{} is the winner with {:,} points".format(winner.name, winner.game_score))
         elif round_number == MAX_ROUNDS:
-            print("Reached max rounds. Left standing: {}".format(', '.join([player for player in players])))
+            print("Round {} reached max rounds. Left standing: {}".format(round_number, ', '.join([player for player in players])))
         else:
             # Case of 0 players left (double-or-more knockout case)
             print("Everybody loses ... ({} players left)".format(len(players)))
 
 class Round():
-    def __init__(self, players, deck, card_num_to_max_value=None, assaf_penalty=30, seed=4, verbose=0, do_stats=True, round_output=None):
+    def __init__(self, players, deck, card_num_to_max_value=None, assaf_penalty=30, seed=4, verbose=0, do_stats=False, round_output=None):
         self.seed = seed
         self.verbose = verbose
         self.assaf_penalty = assaf_penalty
@@ -338,6 +342,10 @@ class Round():
                 starting_player_name = name
                 idx_starting = idx
 
+        if starting_player_name is None: # e.g, if the Assafer loses game because of points
+            idx_starting = 0
+            starting_player_name = list(self.players.keys())[idx_starting]
+
         if self.verbose:
             print('Player starting the round: {}'.format(starting_player_name))
 
@@ -364,14 +372,17 @@ class Round():
         :param name: str. Name of Player considering declaring
         :return: bool. True: declare Yaniv (end round), False: continue the round play
         '''
+
+        prob_successful_yaniv = None
         if self.do_stats:
             prob_successful_yaniv = self.prob_lowest_hand(name)
+            self.turn_output['yaniv_success_prob'] = prob_successful_yaniv
 
         player = self.players[name]
-        if 'always' == player.yaniv_strategy:
+        if ('always' == player.yaniv_strategy) or (prob_successful_yaniv is None):
             return True
         else:
-            if player.prob_successful_yaniv_thresh >= prob_successful_yaniv:
+            if prob_successful_yaniv >= player.prob_successful_yaniv_thresh:
                 return True
 
         return False
@@ -470,8 +481,11 @@ class Round():
             self.round_output[turn] = {}
             self.turn_output = self.round_output[turn]
             self.turn_output['name'] = name
-            self.turn_output['pile_top_accessible'] = self.pile_top_accessible_cards()
-            self.turn_output[name] = list(player.cards_in_hand) # this might be redundant information
+            self.turn_output['pile_top_accessible'] = list(self.pile_top_accessible_cards())
+            #self.turn_output[name] = list(player.cards_in_hand) # this might be redundant information
+            for name_j, player_j in players_ordered.items():
+                self.turn_output[f'{name_j}_ncards'] = len(list(player_j.cards_in_hand))
+                self.turn_output[f'{name_j}_cards'] = list(player_j.cards_in_hand)
             # self._log_meta_data(player)
             if not yaniv_declared:
                 if player.hand_points <= YANIV_LIMIT:
@@ -532,6 +546,7 @@ class Round():
         self.pile_top_cards_this_turn = cards_to_throw
         self.turn_output['throws'] = cards_to_throw
 
+    # TODO: devise better strategies for pulling cards
     def pull_card(self, name):
         player = self.players[name]
 
@@ -548,6 +563,10 @@ class Round():
         else:
             pull_card_function = self.pull_card_from_deck
 
+        # overriding previous decision, because the deck is empty ...
+        if len(self.round_deck) == 0:
+            pull_card_function = self.pull_card_from_pile_top
+
         this_card = pull_card_function()
         # ==================================================
 
@@ -559,9 +578,6 @@ class Round():
     # TODO: deal with situation where pile is empty (deck only? might cause infinite loop)
     def pull_card_from_deck(self):
         self.turn_output['pull_source'] = 'deck'
-        if len(self.round_deck) == 0:
-            print('Error: The deck is empty, game should end at this stage!')
-            DECK_IS_EMPTY_SHOULD_END_ROUND_HERE
         this_card = np.random.choice(self.round_deck, size=1, replace=False)[0]
         self.round_deck.remove(this_card)
 
