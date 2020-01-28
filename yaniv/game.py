@@ -31,16 +31,21 @@ def is_smaller_binary(value, thresh=None):
 # TODO: design and implement different pile_pull_strategy
 # TODO: figure out and implement how to change strategy as game progresses (so to maximise utility)
 class Player():
-    def __init__(self, name, throw_strategy='highest_card', yaniv_strategy='not_always', prob_success_thresh=0.2, seed=None):
+    def __init__(self, name, agent='bot', throw_strategy='highest_card', yaniv_strategy='not_always', prob_success_thresh=0.2, seed=None):
         assert yaniv_strategy in ['always', 'not_always']
+        assert agent in ['bot', 'human']
+
         if seed:
             np.random.seed(seed)
         self.name = name
+        self.agent = agent
 
-        self.throw_strategy = throw_strategy
-        self.pile_pull_strategy = {"highest_card_value_to_pull": np.random.randint(1, 6)}
-        self.yaniv_strategy = yaniv_strategy
-        self.prob_successful_yaniv_thresh = prob_success_thresh
+        if 'bot' == self.agent:
+            self.throw_strategy = throw_strategy
+            self.pile_pull_strategy = {"highest_card_value_to_pull": np.random.randint(1, 6)}
+            self.yaniv_strategy = yaniv_strategy
+            self.prob_successful_yaniv_thresh = prob_success_thresh
+
         self.starts_round = False
         self.unknown_cards = []
 
@@ -66,7 +71,7 @@ class Player():
         self.other_players_known_cards[other_player_name] = remaining_cards
 
 class Game():
-    def __init__(self, player_names, end_game_score=None, assaf_penalty=None, play_jokers=True, do_stats=False,
+    def __init__(self, players, end_game_score=None, assaf_penalty=None, play_jokers=True, do_stats=False,
                  verbose=1, seed=None):
         '''
         verbose:
@@ -82,6 +87,7 @@ class Game():
         :param verbose: int
         :param seed: int
         '''
+
         self.seed = seed
 
         if assaf_penalty:
@@ -98,7 +104,7 @@ class Game():
         self.verbose = verbose
         self.do_stats = do_stats
 
-        self.generate_players(player_names)
+        self.generate_players(players)
         self.deck = define_deck(play_jokers=play_jokers)
         if 1:
             print(f'Deck of {len(self.deck)} cards\n{self.deck}')
@@ -118,7 +124,7 @@ class Game():
 
 
     # TODO: print all strategies
-    def generate_players(self, player_names):
+    def generate_players(self, input_players):
         '''Given a list of players names creates a list of of Player objects
 
         :param player_names:
@@ -128,13 +134,20 @@ class Game():
         self.all_players = []
         print('generating players and their playing strategies:')
 
-        for idx, name in enumerate(player_names):
+        if isinstance(input_players, list):
+            input_players = {name: 'bot' for name in input_players}
+
+
+        for idx, name in enumerate(input_players):
             self._seeding()
-            player = Player(name, seed=self.seed)
+            player = Player(name, agent=input_players[name], seed=self.seed)
             player.id = idx
             self.all_players.append(player)
-            print()
-            print(f'{name} strategy: picks if min pile top min value  <= {player.pile_pull_strategy["highest_card_value_to_pull"]}')
+            str_strategy = ''
+            if 'bot' == player.agent:
+                str_strategy = f' strategy: picks if min pile top min value  <= {player.pile_pull_strategy["highest_card_value_to_pull"]}'
+
+            print(f'\n{name} ({player.agent}){str_strategy}')
             #print("Highest value card will pick from pile: {}".format(player_.pull_strategy["highest_card_value_to_pull"]))
 
             print("-" * 10)
@@ -379,11 +392,18 @@ class Round():
             self.turn_output['yaniv_success_prob'] = prob_successful_yaniv
 
         player = self.players[name]
-        if ('always' == player.yaniv_strategy) or (prob_successful_yaniv is None):
-            return True
-        else:
-            if prob_successful_yaniv >= player.prob_successful_yaniv_thresh:
+        if 'bot' == player.agent:
+            if ('always' == player.yaniv_strategy) or (prob_successful_yaniv is None):
                 return True
+            else:
+                if prob_successful_yaniv >= player.prob_successful_yaniv_thresh:
+                    return True
+        else:
+            id_to_result = {'1': True, '2': False}
+            options = {'1': 'Yes', '2': 'No'}
+            option_id = input(f'Yaniv? {options}')
+
+            return id_to_result[option_id]
 
         return False
         
@@ -529,14 +549,30 @@ class Round():
 
         return pile_top_cards_accessible
 
+    def io_options(self, options, player, option_type='throw'):
+        assert option_type in ['throw', 'pull']
+
+        print(f'\ncurrent hand {player.cards_in_hand}')
+        if 'throw' == option_type:
+            print(f'pile cards: {self.pile_top_accessible_cards()}')
+        option_id = input(f'{option_type}ing:\n{options}')
+
+        return option_id
+
     def throw_cards_to_pile(self, name):
         player = self.players[name]
         valid_combinations = cards_to_valid_throw_combinations(player.cards_in_hand)
         sorted_combinations, sorted_combinations_sums = sort_card_combos(valid_combinations, descending=True, return_sum_values=True)
 
-        # ======= temp, highest combinations =======
-        cards_to_throw = sorted_combinations[0]
-        # =====================
+        if 'human' == player.agent:
+            options = {f'{idx}': option for idx, option in enumerate(sorted_combinations, 1)}
+            option_id = self.io_options(options, player, option_type='throw')
+            cards_to_throw = options[option_id]
+            print(f'you threw: {cards_to_throw}')
+        else:
+            # ======= temp, highest combinations =======
+            cards_to_throw = sorted_combinations[0]
+            # =====================
 
         # updating player hand cards
         player.cards_in_hand = [this_card for this_card in player.cards_in_hand if this_card not in cards_to_throw]
@@ -552,23 +588,40 @@ class Round():
 
         self.chosen_from_pile_top = None
 
-        # ======== need to devise better strategy ===========
-        #pull_card_function = np.random.choice([self.pull_card_from_deck, self.pull_card_from_pile_top])
+        if 'human' == player.agent:
+            options = {'1': 'deck'} #, '2': 'pile': }
+            accessible_cards = self.pile_top_accessible_cards()
+            for option_id, card in enumerate(accessible_cards, 2):
+                options[f'{option_id}'] = card
+            option_id = self.io_options(options, player, option_type='pull')
 
-        card_values = [card_to_value(card) for card in self.pile_top_cards]
-        idx_lowest = np.array(card_values).argmin()
+            if '1' == option_id:
+                this_card = self.pull_card_from_deck()
+                source = 'deck'
+            else:
+                this_card = options[option_id]
+                source = 'pile'
+            print(f'You chose {this_card} from the {source}')
 
-        if player.pile_pull_strategy['highest_card_value_to_pull'] >= card_values[idx_lowest]:
-            pull_card_function = self.pull_card_from_pile_top
         else:
-            pull_card_function = self.pull_card_from_deck
 
-        # overriding previous decision, because the deck is empty ...
-        if len(self.round_deck) == 0:
-            pull_card_function = self.pull_card_from_pile_top
+            # ======== need to devise better strategy ===========
+            #pull_card_function = np.random.choice([self.pull_card_from_deck, self.pull_card_from_pile_top])
 
-        this_card = pull_card_function()
-        # ==================================================
+            card_values = [card_to_value(card) for card in self.pile_top_cards]
+            idx_lowest = np.array(card_values).argmin()
+
+            if player.pile_pull_strategy['highest_card_value_to_pull'] >= card_values[idx_lowest]:
+                pull_card_function = self.pull_card_from_pile_top
+            else:
+                pull_card_function = self.pull_card_from_deck
+
+            # overriding previous decision, because the deck is empty ...
+            if len(self.round_deck) == 0:
+                pull_card_function = self.pull_card_from_pile_top
+
+            this_card = pull_card_function()
+            # ==================================================
 
         self.turn_output['pulls'] = this_card
         player.cards_in_hand.append(this_card)
@@ -587,8 +640,6 @@ class Round():
     def pull_card_from_pile_top(self):
         self.turn_output['pull_source'] = 'pile'
         n_cards = len(self.pile_top_cards)
-
-
 
         accessible_cards = self.pile_top_cards
         if 1 == n_cards:
