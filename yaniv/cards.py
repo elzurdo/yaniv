@@ -11,6 +11,7 @@ JOKER_RANK = 'W'
 JOKER_STREAK_VALUE = -1  # better than 0, because A has value 1
 
 SUITE_CHAR_TO_SYMBOL = {'d': '♦', 'h': '♥', 'c': '♣', 's': '♠', JOKER_SUITE1: '☻', JOKER_SUITE2:'☺'}
+SUITE_CHAR_TO_COLOR = {'d': 'red', 'h': 'red', 'c': 'black', 's': 'black', JOKER_SUITE1: 'green', JOKER_SUITE2: 'blue'}
 
 RANK_TO_VALUE = {str(rank): rank for rank in range(2, 11)}
 for combos in [('A', 1), ('J', 10), ('Q', 10), ('K', 10), (JOKER_RANK, 0)]:
@@ -21,12 +22,20 @@ for combos in [('A', 1), ('J', 11), ('Q', 12), ('K', 13), (JOKER_RANK, JOKER_STR
     RANK_TO_STREAK_VALUES[combos[0]] = combos[1]
 
 
+def card_to_color(card):
+    return SUITE_CHAR_TO_COLOR[card_to_suite(card)]
+
+
 def card_to_value(card):
     return RANK_TO_VALUE[card_to_rank(card)]
 
 
-def cards_to_value_sum(these_cards):
-    return np.sum(list(map(card_to_value, these_cards)))
+def cards_to_values(cards):
+    return list(map(card_to_value, cards))
+
+
+def cards_to_value_sum(cards):
+    return np.sum(cards_to_values(cards))
 
 
 def card_to_streak_value(card):
@@ -64,7 +73,7 @@ def cards_same_rank(these_cards):
     return 1 == len(np.unique(list(map(card_to_rank, these_cards))))
 
 
-def define_deck(play_jokers=True):
+def get_deck(play_jokers=True):
     '''Return the deck in dict type
 
     :param play_jokers: bool. True: game played with 2 jokers, False: without
@@ -160,3 +169,15 @@ def cards_to_valid_throw_combinations(cards):
         valid_combinations.append(combination)
 
     return valid_combinations
+
+
+# TODO: create test
+def pile_top_accessible_cards(pile_top_cards):
+    pile_top_cards_accessible = pile_top_cards.copy()
+    if len(pile_top_cards_accessible) > 2:
+        if not cards_same_rank(pile_top_cards_accessible):
+            # only outer cards accessible in case of streak
+            cards_sorted = sort_cards(pile_top_cards_accessible)
+            pile_top_cards_accessible = [cards_sorted[0], cards_sorted[-1]]
+
+    return pile_top_cards_accessible

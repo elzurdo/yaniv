@@ -85,3 +85,13 @@ def calculate_prob_ht_gt_hi(hand_points_i, card_values, n_cards): # was calculat
     prob_hj_gt_hi = hj_gt_hi_counter * 1. / permutations_counter
 
     return prob_hj_gt_hi
+
+
+# TODO: test (OR TAKE OUT IF NOT USED)
+def is_smaller_or_equal_binary(value, thresh=None):
+    return int(value <= thresh)
+
+
+# TODO: test
+def is_smaller_binary(value, thresh=None):
+    return int(value < thresh)

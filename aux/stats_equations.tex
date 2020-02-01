@@ -4,6 +4,111 @@
 \usepackage{amsmath} %maths
 \usepackage[utf8]{inputenc} %useful to type directly diacritic characters
 \begin{document}
+
+Yaniv is a popular card game in Israel also known in Nepal by the name XX?
+
+Here we describe the basics of the game and describe the statistics for successful decleration of a round
+
+Definitions:   \\
+$C_{i,j}$ - cards possessed by player $i$ as known to player $j$.  
+$H_i$ - sum of values cards in hand of player $i$.    \\
+$n_{\mathrm{cards}_i}$ - number of cards in the hand of player $i$.  \\
+
+
+Our main objective is to calculate the probability that player $i$ possesses the lowest hand: $P_{i}(H_i = \mathrm{min}\{H\}) $.  \\
+
+For simplicity we will commence with two players reducing our task to calculate  $P(H_j>H_i)$.  
+
+\section{Two Players}
+
+Assuming a player $i$ declared victory (known as calling Yaniv), we would like to know the probability of success. 
+We assume $N$ cards are not known to the observer (player or outsider) and that player $j$ has $n_j$ cards in their hand. The number of possible hand card combinations are 
+$\binom{N}{n_j}$. In the extreme case of the beginning of the game, $N=51$ (subtracting the known card from the pile top) and $n_j=5$, the number 
+of card combinations are 2.3 million (in a deck with two jokers this would yield 2.9 million). Calculating the sum values of all hand combinations and creating a ratio for those $h_j>h_j$ is manageble with current computing power\footnote{On a MacBook Air 1.7 GHz Intel Core i7  for $N=45$, $n_j=5$ calculate a runtime of $\sim15$ seconds.}, but could be improved for scalability purposes.
+\\ \\
+
+\subsection{Threshold  as Prior}
+If we are interested in calculating the success only after Yaniv has been declared, we can leverage this knowledge.  
+E.g, examining the extreme case of Yaniv being declared at the first turn of the game, we can safely assume that player $i$ only has cards with values $1,2,3$. 
+This does not change $N$ or $n_j$, but this motivates us to different approach using the chain rule with condition $U$:  
+\begin{equation*}
+P(h_j >h_i) = P(h_j >h_i |U)P(U) + P(h_j >h_i |\widetilde{U})P(\widetilde{U})
+\end{equation*}, 
+where $U:=  \forall \{C\}_{n_j} < t$, i.e, all possible unknown $N$ cards in set  $\{C\}_{n_j}$ that player $j$ could posses  are below a threshold $t$.   
+The threshold  $t$ is the maximum card value that $j$ is allowed to posses in order to Assaf player $i$ a
+and can be defined as a function of both the Yaniv value $y$ and $n_j$: $t=f(y, n_j)$. \\
+Since $(\widetilde{U}$ means that at least one card value is above $t$ and $h_j$ is the Yaniv value we know that $P(h_j >h_i |\widetilde{U})=1$ reducing the calculation to 
+\begin{equation*}
+P(h_j >h_i) = P(h_j >h_i |U)P(U) + 1 - P(U)
+\end{equation*}.   
+
+This means that as long as that we can calculate $P(U)$ the only brute force required is to calculate $ P(h_j >h_i |U)$, 
+which, by definition of $U$ means that we (practically in most cases substantially) reduced to a subset of $C$ from $N$.
+
+
+\subsection{Determining Threshold $t_{n_j}(h_i)$}
+The threshold is a key element in reducing the combinatorial search space, which may be substantial if $N$ is large.  
+Hence our objective is to find a threshold $t$ such that $P(h_j >h_i |\widetilde{U})=1$, i.e, if player $j$ has a card $>t$ they 
+will definitely lose to player $i$.  
+
+E.g, if player $j$ possesses one card $n_j=1$,  in order to ensure $h_j > h_i$, if they have a card with value $h_i + 1$ they will lose. 
+If $n_j=2$ the thresh is reduced to $h_i$. Generalising to $n_j$ cards we find:  
+ 
+\begin{equation*}
+t_{n_j}(h_i) = \text{max}(0, \ h_i - n_j + 2)
+\end{equation*}  
+If jokers are in play we this threshold if further relaxed to  $t_{n_j}(h_i) = \text{max}(0,\  h_i - n_j + 3)$. 
+\\
+We are now ready to calculate the probability that all cards are below $t_{n_j}$ $P(U)$. 
+
+\subsection{Calculating $P(U)=P(\forall \{C\} <  t_{n_j})$}
+Our objective is now to calculate the probability that all $n_j$ cards in player $j$'s possession are smaller than $t_{n_j}$, 
+given $N$ unknown cards. To this extent we will convert all $N$ card values $v$ to binary values $b$: $b= v < t_{n_j}$. 
+
+\[
+   b= 
+\begin{cases}
+    1,& v < t_{n_j}\\
+    0,              & \text{otherwise}
+\end{cases}
+\].
+With this we can now use the hypergeometric distribution:
+
+\begin{equation*}
+P(U) = \frac{  \binom{K}{k}  \binom{N-K}{n_{j} - k} }{  \binom{N}{n_j} }
+\end{equation*}, 
+where $K=\sum_{m=1}^{C}b_m$ is the number of successes in the unknown cards $C$ and $k=\sum_{m=1}^{n_j}b_m$ is the number of successes in player $j$'s hand. 
+
+Since we are interested in $k=n_j$ we obtain
+
+\begin{equation*}
+P(U) = \frac{  \binom{K}{n_j}  }{  \binom{N}{n_j} } = \frac{K! \left(N-n_j \right)! }{N!\left(K-n_j \right)!}
+\end{equation*} 
+
+
+
+\subsection{Prior Knowledge: Leveraging the Number of Cards}
+
+
+\subsection{Test Subsection}
+test
+\subsubsection{Test Subsubsection}
+test
+\paragraph{Test Modified Paragraph}
+test
+
+
+
+
+We further simplify the task with the prior 
+information of the number of cards possessed by player $j$ $n_{\mathrm{cards}_j}$, reducing the task to $P(H_j>H_i| n_{\mathrm{cards}_j})$. 
+\\ \\ \\ \\ \\
+
+Assuming $N_{\mathrm{unk}_i}$ cards that are unknown to player $i$ there are $\frac{N_{\mathrm{unk}_i}!}{4}$ combinations.
+
+
+
+
 Probability that player $i$ has the lowest hand value $H_i$:  \\
 (1) $P_{i}(H_i = \mathrm{min}\{H\}) = \Pi_{j!=i}^{N} P(H_j > H_i)$
 \\ \\
