@@ -1,5 +1,11 @@
 from scipy.stats import hypergeom
-from itertools import permutations
+from itertools import combinations, permutations
+from scipy.special import comb
+import numpy as np
+
+from cards import cards_to_value_sum, cards_to_values
+#from game import YANIV_LIMIT
+YANIV_LIMIT = 7
 
 # TODO: build on this principle to make card_num_to_max_single_value in a dyanmic fashion, i.e, with knowldege of cards thrown out
 def card_number_to_max_card_value_to_declare_yaniv(play_jokers=True):
@@ -95,3 +101,104 @@ def is_smaller_or_equal_binary(value, thresh=None):
 # TODO: test
 def is_smaller_binary(value, thresh=None):
     return int(value < thresh)
+
+
+# TODO: create test
+def calculate_number_card_combinations(n_cards_total, n_cards_hand, repetition=False):
+    return comb(n_cards_total, n_cards_hand, repetition=repetition)
+
+
+# TODO: create test
+def calculate_p_hj_gt_hi_accurate(cards, n_j, h_i, verbose=0):
+    if len(cards) == 0:
+        return 1
+
+    hj_gt_hi_bool = []
+
+    for cards_j in combinations(cards, n_j):
+        bool_ = cards_to_value_sum(cards_j) > h_i
+        if verbose > 1:
+            print(cards_j, bool_)
+        hj_gt_hi_bool.append(bool_)
+
+    successes = np.sum(hj_gt_hi_bool)
+    total = len(hj_gt_hi_bool)
+
+    if verbose:
+        print(f'total: {total}\nsuccesses: {successes}')
+
+    return successes / total
+
+
+def _play_jokers_to_thresh_factor(play_jokers):
+    if play_jokers:
+        return 3
+    else:
+        return 2
+
+def _calculate_thresh_nj(n_j, h_i, play_jokers=True, verbose=0):
+    t_nj = h_i - n_j + _play_jokers_to_thresh_factor(play_jokers)
+
+    if verbose:
+        print(f'n_j={n_j}, h_i={h_i}, player_jokers={play_jokers} yields\nt_nj={t_nj}')
+
+    return t_nj
+
+def _subset_cards_by_thresh(cards, thresh, verbose=0):
+    below_tresh_binary = list(map(lambda v: is_smaller_binary(v, thresh), cards_to_values(cards)))
+    cards_threshed = list(np.array(cards)[np.array(below_tresh_binary, dtype=bool)])
+
+    if verbose:
+        print(f'N: {len(cards)}\n{cards}\nn: {len(cards_threshed)}\n{cards_threshed}')
+
+    return cards_threshed
+
+
+def calculate_p_hj_gt_hi_conditioned_U(n_j, h_i, cards, play_jokers=True, verbose=0):
+    thresh = _calculate_thresh_nj(n_j, h_i, play_jokers=play_jokers, verbose=verbose)
+    cards_threshed = _subset_cards_by_thresh(cards, thresh, verbose=verbose)
+
+    p_hj_gt_hi_conditioned_U = calculate_p_hj_gt_hi_accurate(cards_threshed, n_j, h_i, verbose=verbose)
+
+    if verbose:
+        print(f'P(h_j>h_i|U)={p_hj_gt_hi_conditioned_U:0.3f}')
+
+    return p_hj_gt_hi_conditioned_U
+
+
+def calculate_p_U(cards, cards_threshed, n_j, verbose=0): #hypergeom_k_equals_n(N, K, n):
+    N = len(cards)
+    K = len(cards_threshed)
+
+    p_U = comb(K, n_j, repetition=False) / comb(N, n_j, repetition=False)
+
+    if verbose:
+        print(f'N={N}, K={K}, n_j={n_j}, yields:\np(U)={p_U:0.3f}')
+
+    return p_U
+
+
+# TODO might have to be smarter about the h_i/yaniv_limit given `cards` ...
+def calculate_p_hj_gt_hi_n_j_prior(n_j, cards, h_i=None, play_jokers=True, verbose=0):
+    if h_i is None:
+        h_i = YANIV_LIMIT
+
+    # --- code from calculate_p_hj_gt_hi_conditioned_U
+    thresh = _calculate_thresh_nj(n_j, h_i, play_jokers=play_jokers, verbose=verbose)
+    cards_threshed = _subset_cards_by_thresh(cards, thresh, verbose=verbose)
+
+    p_hj_gt_hi_conditioned_U = calculate_p_hj_gt_hi_accurate(cards_threshed, n_j, h_i, verbose=verbose)
+
+    if verbose:
+        print(f'P(h_j>h_i|U)={p_hj_gt_hi_conditioned_U:0.3f}')
+    # ---
+
+    p_U = calculate_p_U(cards, cards_threshed, n_j, verbose=verbose)
+
+    p_hj_gt_hi = p_hj_gt_hi_conditioned_U * p_U + 1 - p_U
+
+    if verbose:
+        print(f'P(hj>hi={h_i}|n_j, cards)={p_hj_gt_hi:0.3f}')
+
+    return p_hj_gt_hi
+
