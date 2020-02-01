@@ -3,7 +3,7 @@
 import numpy as np
 import sys
 
-from cards import (define_deck, card_to_pretty,
+from cards import (get_deck, card_to_pretty,
                    cards_to_valid_throw_combinations,
                    sort_card_combos,
                    card_to_value,
@@ -13,9 +13,9 @@ from cards import (define_deck, card_to_pretty,
 
 from stats import (card_number_to_max_card_value_to_declare_yaniv,
                    calculate_prob_all_cards_under_thresh,
-                   calculate_prob_ht_gt_hi
+                   calculate_prob_ht_gt_hi,
+                   is_smaller_or_equal_binary
                    )
-
 
 ASSAF_PENALTY = 30
 END_GAME_SCORE = 200
@@ -23,8 +23,6 @@ MAX_ROUNDS = 100
 MAX_TURNS = 40
 YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 
-def is_smaller_binary(value, thresh=None):
-    return int(value <= thresh)
 
 # TODO: design and implement different throw_strategy
 # TODO: design and implement different yaniv_strategy ('always' (i.e, 7), 'only below 4', 'by statistics')
@@ -105,7 +103,7 @@ class Game():
         self.do_stats = do_stats
 
         self.generate_players(players)
-        self.deck = define_deck(play_jokers=play_jokers)
+        self.deck = get_deck(play_jokers=play_jokers)
         if 1:
             print(f'Deck of {len(self.deck)} cards\n{self.deck}')
         self.game_output = {}
@@ -287,6 +285,7 @@ class Round():
 
         #self.meta = {}  # meta data for logging
         self.round_output = round_output
+        self.ax = None
 
     def play(self):
         # round starts with a full deck
@@ -318,7 +317,7 @@ class Round():
             self._seeding()
             # assigning randomised selected cards to Player
             player.cards_in_hand = np.random.choice(self.round_deck, size=num_cards, replace=False)
-            self.round_output['start'][name] = list(player.cards_in_hand)
+            self.round_output['start'][f'{name}_cards'] = list(player.cards_in_hand)
             # calculating points in a hand of Player
             player.sum_hand_points()
             player.remove_cards_from_unknown(player.cards_in_hand)
@@ -539,6 +538,7 @@ class Round():
             # perhaps there is a better way of doing this loop.
             self.play_round(players_ordered=players_ordered, turn=turn)
 
+    # TODO: use pile_accessible_cards function from cards.py
     def pile_top_accessible_cards(self):
         pile_top_cards_accessible = self.pile_top_cards
         if len(pile_top_cards_accessible) > 2:
@@ -551,6 +551,11 @@ class Round():
 
     def io_options(self, options, player, option_type='throw'):
         assert option_type in ['throw', 'pull']
+
+        #if self.ax is not None:
+        #    self.ax.clear()
+        #self.ax = visualise_cards(player.cards_in_hand, ax=self.ax)
+        #self.ax = visualise_cards(self.pile_top_cards, ax=self.ax, cards_type='pile')
 
         print(f'\ncurrent hand {player.cards_in_hand}')
         if 'throw' == option_type:
@@ -703,7 +708,7 @@ class Round():
             print(f"Given {player_j.name} has {n_cards} cards, the max threshold is {max_value_to_win} (i.e, if has above this value, no chance to Assaf)")
 
 
-        cards_unknown_smaller_than_max_bool = list(map(lambda x: is_smaller_binary(x, thresh=max_value_to_win), cards_unknown_values))
+        cards_unknown_smaller_than_max_bool = list(map(lambda x: is_smaller_or_equal_binary(x, thresh=max_value_to_win), cards_unknown_values))
 
         # Calculating the probability that all cards in other player's hand is smaller than the max thresh possible to Yaniv
         prob_all_cards_under_thresh = calculate_prob_all_cards_under_thresh(n_cards, cards_unknown_smaller_than_max_bool, verbose=self.verbose - 2)

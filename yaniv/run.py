@@ -1,7 +1,7 @@
 import game
 
-#players = ['Albert','Roland', 'Amos','Claude']
-players = {'Eyal': 'human','Roland':'bot', 'Amos':'bot','Claude':'bot'}
+players = ['Albert','Roland', 'Amos','Claude']
+#players = {'Eyal': 'human','Roland':'bot', 'Amos':'bot','Claude':'bot'}
 end_game_score = 200
 
 do_stats = False
