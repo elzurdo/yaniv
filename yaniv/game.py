@@ -104,7 +104,7 @@ class Game():
         self.do_stats = do_stats
 
         self.generate_players(players)
-        self.deck = get_deck(play_jokers=play_jokers)
+        self.deck = get_deck(play_jokers=play_jokers, shuffle=True, seed=self.seed)
         if 1:
             print(f'Deck of {len(self.deck)} cards\n{self.deck}')
         self.game_output = {}

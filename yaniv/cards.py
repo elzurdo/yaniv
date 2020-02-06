@@ -3,6 +3,7 @@
 from itertools import groupby
 from operator import itemgetter
 import numpy as np
+import random
 
 
 JOKER_SUITE1 = 'a'
@@ -82,7 +83,7 @@ def cards_same_rank(these_cards):
     return 1 == len(np.unique(list(map(card_to_rank, these_cards))))
 
 
-def get_deck(play_jokers=True):
+def get_deck(play_jokers=True, shuffle=True, seed=None):
     '''Return the deck in dict type
 
     :param play_jokers: bool. True: game played with 2 jokers, False: without
@@ -95,8 +96,12 @@ def get_deck(play_jokers=True):
     deck = ["{}{}".format(rank, suit) for rank in ranks for suit in suits]
 
     if play_jokers:
-        deck.append('{}{}'.format(JOKER_RANK, JOKER_SUITE1))
-        deck.append('{}{}'.format(JOKER_RANK, JOKER_SUITE2))
+        deck.insert(0, '{}{}'.format(JOKER_RANK, JOKER_SUITE1))
+        deck.insert(1, '{}{}'.format(JOKER_RANK, JOKER_SUITE2))
+
+    if shuffle:
+        random.seed(seed)
+        random.shuffle(deck)
 
     return deck
 
