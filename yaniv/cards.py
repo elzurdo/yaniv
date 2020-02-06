@@ -3,7 +3,6 @@
 from itertools import groupby
 from operator import itemgetter
 import numpy as np
-import random
 
 
 JOKER_SUITE1 = 'a'
@@ -100,8 +99,8 @@ def get_deck(play_jokers=True, shuffle=True, seed=None):
         deck.insert(1, '{}{}'.format(JOKER_RANK, JOKER_SUITE2))
 
     if shuffle:
-        random.seed(seed)
-        random.shuffle(deck)
+        np.random.seed(seed)
+        np.random.shuffle(deck)
 
     return deck
 

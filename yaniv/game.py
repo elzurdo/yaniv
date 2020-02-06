@@ -104,7 +104,7 @@ class Game():
         self.do_stats = do_stats
 
         self.generate_players(players)
-        self.deck = get_deck(play_jokers=play_jokers, shuffle=True, seed=self.seed)
+        self.deck = get_deck(play_jokers=play_jokers, shuffle=False, seed=self.seed)
         if 1:
             print(f'Deck of {len(self.deck)} cards\n{self.deck}')
         self.game_output = {}
@@ -294,6 +294,9 @@ class Round():
         # round starts with a full deck
         self.round_deck = list(self.deck)
 
+        np.random.seed(self.seed)
+        np.random.shuffle(self.round_deck)
+
         self.distribute_cards()
 
         self.play_round()
@@ -314,12 +317,13 @@ class Round():
         full_deck = self.round_deck.copy()
 
         self.round_output['start'] = {}
+        n_players = len(self.players)
         for name, player in self.players.items():
             player.add_cards_to_unknown(full_deck)
 
-            self._seeding()
-            # assigning randomised selected cards to Player
-            player.cards_in_hand = np.random.choice(self.round_deck, size=num_cards, replace=False)
+            # assigning selected cards to Player
+            player.cards_in_hand = self.round_deck[::n_players][:num_cards]
+
             self.round_output['start'][f'{name}_cards'] = list(player.cards_in_hand)
             # calculating points in a hand of Player
             player.sum_hand_points()
@@ -328,6 +332,8 @@ class Round():
             # Deleting selected cards from the round's deck
             for card in player.cards_in_hand:
                 self.round_deck.remove(card)
+
+            print(name, player.cards_in_hand, len(self.round_deck))
 
         card = np.random.choice(self.round_deck, size=1, replace=False)
         self.pile_top_cards = card
