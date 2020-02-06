@@ -2,9 +2,11 @@ import matplotlib
 #matplotlib.use('TkAgg')
 from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
+import numpy as np
 
 from cards import card_to_pretty, pile_top_accessible_cards, card_to_color
 from stats import calculate_p_hj_gt_hi_n_j_prior
+from summarise_game import game_turns_per_round
 
 CARD_WIDTH, CARD_HEIGHT = 1, 1/0.62 * 0.88 * 0.8 #0.62 , 0.88
 XLIM, YLIM = 6, 4
@@ -100,3 +102,30 @@ def add_stats(n_j, cards_unknown, ax, h_i=None, play_jokers=True, verbose=False)
     ax.set_title(f'p(success=True)={prob_success:0.3f}', fontsize=16)
 
 
+def plot_game_turns_per_round(game_output, bins=None, plot_type='series', fontsize=16):
+    assert plot_type in ['series', 'histogram']
+
+
+    turns_per_round = game_turns_per_round(game_output)
+
+    if 'histogram' == plot_type:
+        xlabel = 'turns in round'
+        ylabel = 'frequency'
+
+        if bins is None:
+            bins = np.arange(1, 41)
+
+        plt.hist(turns_per_round, bins=bins, alpha=0.7)
+
+    elif 'series' == plot_type:
+        xlabel = 'round'
+        ylabel = 'turns'
+        round_val = np.arange(len(turns_per_round)) + 5
+
+        plt.plot(round_val, turns_per_round, '-o')
+        plt.xticks(round_val, round_val, fontsize=fontsize * 0.8)
+        plt.yticks(fontsize=fontsize * 0.8)
+        plt.ylim(0, np.max(turns_per_round) + 1)
+
+    plt.xlabel(xlabel, fontsize=fontsize)
+    plt.ylabel(ylabel, fontsize=fontsize)
