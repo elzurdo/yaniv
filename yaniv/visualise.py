@@ -4,6 +4,7 @@ from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
 
 from cards import card_to_pretty, pile_top_accessible_cards, card_to_color
+from stats import calculate_p_hj_gt_hi_n_j_prior
 
 CARD_WIDTH, CARD_HEIGHT = 1, 1/0.62 * 0.88 * 0.8 #0.62 , 0.88
 XLIM, YLIM = 6, 4
@@ -27,14 +28,27 @@ def visualise_cards(cards, ax=None, cards_type='hand', show_spines=False):
 
     ax = visualise_cards(cards_hand, ax=None, cards_type='hand', show_spines=False)
     visualise_cards(cards_pile, ax=ax, cards_type='pile', show_spines=False)
+    visualise_cards(4, ax=ax, cards_type='opponent', show_spines=False)
     """
-    assert cards_type in ['hand', 'pile', 'deck']
+    assert cards_type in ['hand', 'pile', 'deck', 'opponent']
 
+    show_card_values = True
     if 'hand' == cards_type:
         bottom = 0.1
     elif 'pile' == cards_type:
         bottom = YLIM / 2 - CARD_HEIGHT / 2
         cards_accessible = pile_top_accessible_cards(cards)
+    elif 'opponent' == cards_type:
+        bottom = YLIM / 2 + CARD_HEIGHT / 2 + 0.1
+        assert isinstance(cards, int)
+        cards = [None] * cards
+        show_card_values = False
+
+
+    hatch = None
+    if not show_card_values:
+        hatch = '/'
+
 
     if ax is None:
         fig, ax = plt.subplots(1, figsize=FIGSIZE)
@@ -51,16 +65,18 @@ def visualise_cards(cards, ax=None, cards_type='hand', show_spines=False):
             if card not in cards_accessible:
                 alpha = 0.3
 
-        ax.add_patch(Rectangle((left, bottom), CARD_WIDTH, CARD_HEIGHT, fill=False, alpha=alpha))
+        ax.add_patch(Rectangle((left, bottom), CARD_WIDTH, CARD_HEIGHT, fill=False, alpha=alpha, hatch=hatch))
 
-        card_pretty = card_to_pretty(card)
-        if 'W' in card_pretty:
-            card_pretty = card_pretty[-1]
 
-        ax.annotate(card_pretty,
-                    ((left + (left + CARD_WIDTH)) / 2 - dx, (bottom + CARD_HEIGHT / 2.2)),
-                    rotation=0,
-                    fontsize=30, alpha=alpha, color=card_to_color(card))
+        if show_card_values:
+            card_pretty = card_to_pretty(card)
+            if 'W' in card_pretty:
+                card_pretty = card_pretty[-1]
+
+            ax.annotate(card_pretty,
+                        ((left + (left + CARD_WIDTH)) / 2 - dx, (bottom + CARD_HEIGHT / 2.2)),
+                        rotation=0,
+                        fontsize=30, alpha=alpha, color=card_to_color(card))
 
         left += CARD_WIDTH + card_margin
 
@@ -76,4 +92,11 @@ def visualise_cards(cards, ax=None, cards_type='hand', show_spines=False):
 
 
     return ax
+
+
+
+def add_stats(n_j, cards_unknown, ax, h_i=None, play_jokers=True, verbose=False):
+    prob_success = calculate_p_hj_gt_hi_n_j_prior(n_j, cards_unknown, h_i=h_i, play_jokers=play_jokers, verbose=verbose)
+    ax.set_title(f'p(success=True)={prob_success:0.3f}', fontsize=16)
+
 
