@@ -41,7 +41,7 @@ class Player():
 
         if 'bot' == self.agent:
             self.throw_strategy = throw_strategy
-            self.pile_pull_strategy = {"highest_card_value_to_pull": np.random.randint(1, 6)}
+            self.pile_pull_strategy = {"highest_card_value_to_pull": np.random.randint(3, 6)}
             self.yaniv_strategy = yaniv_strategy
             self.prob_successful_yaniv_thresh = prob_success_thresh
 
@@ -317,12 +317,13 @@ class Round():
         full_deck = self.round_deck.copy()
 
         self.round_output['start'] = {}
-        n_players = len(self.players)
+        self.round_output['start']['deck_ordered'] = full_deck
+        n_players_left = len(self.players)
         for name, player in self.players.items():
             player.add_cards_to_unknown(full_deck)
 
             # assigning selected cards to Player
-            player.cards_in_hand = self.round_deck[::n_players][:num_cards]
+            player.cards_in_hand = self.round_deck[::n_players_left][:num_cards]
 
             self.round_output['start'][f'{name}_cards'] = list(player.cards_in_hand)
             # calculating points in a hand of Player
@@ -333,7 +334,7 @@ class Round():
             for card in player.cards_in_hand:
                 self.round_deck.remove(card)
 
-            print(name, player.cards_in_hand, len(self.round_deck))
+            n_players_left -= 1
 
         card = np.random.choice(self.round_deck, size=1, replace=False)
         self.pile_top_cards = card

@@ -82,7 +82,7 @@ def cards_same_rank(these_cards):
     return 1 == len(np.unique(list(map(card_to_rank, these_cards))))
 
 
-def get_deck(play_jokers=True, shuffle=True, seed=None):
+def get_deck(play_jokers=True, shuffle=False, seed=None):
     '''Return the deck in dict type
 
     :param play_jokers: bool. True: game played with 2 jokers, False: without
