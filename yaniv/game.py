@@ -8,13 +8,14 @@ from cards import (get_deck, card_to_pretty,
                    sort_card_combos,
                    card_to_value,
                    cards_same_rank,
-                   sort_cards,
+                   sort_cards
                    )
 
 from stats import (card_number_to_max_card_value_to_declare_yaniv,
                    calculate_prob_all_cards_under_thresh,
                    calculate_prob_ht_gt_hi,
-                   is_smaller_or_equal_binary
+                   is_smaller_or_equal_binary,
+                   calculate_p_hj_gt_hi_n_j_prior
                    )
 
 ASSAF_PENALTY = 30
@@ -218,7 +219,7 @@ class Game():
 
             self.round = Round(players, self.deck, assaf_penalty=self.assaf_penalty,
                                card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed,
-                               round_output=self.game_output[round_number], do_stats=self.do_stats)
+                               round_output=self.game_output[round_number], do_stats=self.do_stats, play_jokers=self.play_jokers)
             self.round.play()
 
             #"""
@@ -272,7 +273,8 @@ class Game():
             print("Everybody loses ... ({} players left)".format(len(players)))
 
 class Round():
-    def __init__(self, players, deck, card_num_to_max_value=None, assaf_penalty=30, seed=4, verbose=0, do_stats=False, round_output=None):
+    def __init__(self, players, deck, card_num_to_max_value=None, assaf_penalty=30, seed=4, verbose=0, do_stats=False,
+                 round_output=None, play_jokers=True):
         self.seed = seed
         self.verbose = verbose
         self.assaf_penalty = assaf_penalty
@@ -286,6 +288,7 @@ class Round():
         #self.meta = {}  # meta data for logging
         self.round_output = round_output
         self.ax = None
+        self.play_jokers = play_jokers
 
     def play(self):
         # round starts with a full deck
@@ -387,7 +390,10 @@ class Round():
 
         prob_successful_yaniv = None
         if self.do_stats:
-            prob_successful_yaniv = self.prob_lowest_hand(name)
+            if len(self.players) > 2:
+                prob_successful_yaniv = self.prob_lowest_hand(name)
+            else:
+                prob_successful_yaniv = self.prob_lowest_hand_two_players(name)
             self.turn_output['yaniv_success_prob'] = prob_successful_yaniv
 
         player = self.players[name]
@@ -673,6 +679,15 @@ class Round():
                 player.knowledgewise_drop_cards_from_player(turn_player_name, self.pile_top_cards)
                 if self.chosen_from_pile_top:
                     player.knowledgewise_assign_card_to_player(turn_player_name, self.chosen_from_pile_top)
+
+    def prob_lowest_hand_two_players(self, name):
+        h_i = self.players[name].hand_points
+        cards_unknown = self.players[name].unknown_cards
+        other_name = list(set(self.players.keys()) - set([name]))[0]
+        n_j = len(self.players[other_name].cards_in_hand)
+
+        return calculate_p_hj_gt_hi_n_j_prior(n_j, cards_unknown, h_i=h_i, play_jokers=self.play_jokers,
+                                              verbose=self.verbose)
 
     def prob_lowest_hand(self, name):
         player_i = self.players[name]

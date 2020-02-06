@@ -3,7 +3,7 @@ from itertools import combinations, permutations
 from scipy.special import comb
 import numpy as np
 
-from cards import cards_to_value_sum, cards_to_values
+from cards import cards_to_value_sum, cards_to_values, cards_to_number_jokers
 #from game import YANIV_LIMIT
 YANIV_LIMIT = 7
 
@@ -121,8 +121,15 @@ def calculate_p_hj_gt_hi_accurate(cards, n_j, h_i, verbose=0):
             print(cards_j, bool_)
         hj_gt_hi_bool.append(bool_)
 
+    if len(hj_gt_hi_bool) == 0: # because len(cards)<n_j
+        hj_gt_hi_bool.append( cards_to_value_sum(cards) > h_i   )
+
+
     successes = np.sum(hj_gt_hi_bool)
     total = len(hj_gt_hi_bool)
+
+    #print(n_j, cards, hj_gt_hi_bool)
+    #assert total > 0
 
     if verbose:
         print(f'total: {total}\nsuccesses: {successes}')
@@ -130,17 +137,11 @@ def calculate_p_hj_gt_hi_accurate(cards, n_j, h_i, verbose=0):
     return successes / total
 
 
-def _play_jokers_to_thresh_factor(play_jokers):
-    if play_jokers:
-        return 3
-    else:
-        return 2
-
-def _calculate_thresh_nj(n_j, h_i, play_jokers=True, verbose=0):
-    t_nj = h_i - n_j + _play_jokers_to_thresh_factor(play_jokers)
+def _calculate_thresh_nj(n_j, h_i, n_jokers=0, verbose=0):
+    t_nj = h_i - n_j + 2 + n_jokers
 
     if verbose:
-        print(f'n_j={n_j}, h_i={h_i}, player_jokers={play_jokers} yields\nt_nj={t_nj}')
+        print(f'n_j={n_j}, h_i={h_i}, n_jokers={n_jokers} yields\nt_nj={t_nj}')
 
     return t_nj
 
@@ -155,7 +156,11 @@ def _subset_cards_by_thresh(cards, thresh, verbose=0):
 
 
 def calculate_p_hj_gt_hi_conditioned_U(n_j, h_i, cards, play_jokers=True, verbose=0):
-    thresh = _calculate_thresh_nj(n_j, h_i, play_jokers=play_jokers, verbose=verbose)
+    n_jokers = 0
+    if play_jokers:
+        n_jokers = cards_to_number_jokers(cards)
+
+    thresh = _calculate_thresh_nj(n_j, h_i, n_jokers=n_jokers, verbose=verbose)
     cards_threshed = _subset_cards_by_thresh(cards, thresh, verbose=verbose)
 
     p_hj_gt_hi_conditioned_U = calculate_p_hj_gt_hi_accurate(cards_threshed, n_j, h_i, verbose=verbose)
@@ -183,8 +188,12 @@ def calculate_p_hj_gt_hi_n_j_prior(n_j, cards, h_i=None, play_jokers=True, verbo
     if h_i is None:
         h_i = YANIV_LIMIT
 
+    n_jokers = 0
+    if play_jokers:
+        n_jokers = cards_to_number_jokers(cards)
+
     # --- code from calculate_p_hj_gt_hi_conditioned_U
-    thresh = _calculate_thresh_nj(n_j, h_i, play_jokers=play_jokers, verbose=verbose)
+    thresh = _calculate_thresh_nj(n_j, h_i, n_jokers=n_jokers, verbose=verbose)
     cards_threshed = _subset_cards_by_thresh(cards, thresh, verbose=verbose)
 
     p_hj_gt_hi_conditioned_U = calculate_p_hj_gt_hi_accurate(cards_threshed, n_j, h_i, verbose=verbose)
