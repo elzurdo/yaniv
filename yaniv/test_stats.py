@@ -1,4 +1,4 @@
-# py.test
+# pytest
 
 from unittest import TestCase
 

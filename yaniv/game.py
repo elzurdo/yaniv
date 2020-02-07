@@ -8,13 +8,14 @@ from cards import (get_deck, card_to_pretty,
                    sort_card_combos,
                    card_to_value,
                    cards_same_rank,
-                   sort_cards,
+                   sort_cards
                    )
 
 from stats import (card_number_to_max_card_value_to_declare_yaniv,
                    calculate_prob_all_cards_under_thresh,
                    calculate_prob_ht_gt_hi,
-                   is_smaller_or_equal_binary
+                   is_smaller_or_equal_binary,
+                   calculate_p_hj_gt_hi_n_j_prior
                    )
 
 ASSAF_PENALTY = 30
@@ -40,7 +41,7 @@ class Player():
 
         if 'bot' == self.agent:
             self.throw_strategy = throw_strategy
-            self.pile_pull_strategy = {"highest_card_value_to_pull": np.random.randint(1, 6)}
+            self.pile_pull_strategy = {"highest_card_value_to_pull": np.random.randint(3, 6)}
             self.yaniv_strategy = yaniv_strategy
             self.prob_successful_yaniv_thresh = prob_success_thresh
 
@@ -103,9 +104,9 @@ class Game():
         self.do_stats = do_stats
 
         self.generate_players(players)
-        self.deck = get_deck(play_jokers=play_jokers)
+        self.deck = get_deck(play_jokers=play_jokers, shuffle=False, seed=self.seed)
         if 1:
-            print(f'Deck of {len(self.deck)} cards\n{self.deck}')
+            print(f'Deck of {len(self.deck)} cards\n{list(map(card_to_pretty, self.deck))}')
         self.game_output = {}
 
     def play(self):
@@ -218,7 +219,7 @@ class Game():
 
             self.round = Round(players, self.deck, assaf_penalty=self.assaf_penalty,
                                card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed,
-                               round_output=self.game_output[round_number], do_stats=self.do_stats)
+                               round_output=self.game_output[round_number], do_stats=self.do_stats, play_jokers=self.play_jokers)
             self.round.play()
 
             #"""
@@ -240,10 +241,10 @@ class Game():
                 # If a player hits these luck values their score is reduced
                 if player.game_score == 100:
                     player.game_score = 50
-                    print("Lucky {}! Aggregated 100 points reduced to 50".format(name))
+                    print(f"Round {round_number}:\n\tLucky {name}! Aggregated 100 points reduced to 50")
                     self.game_output[round_number]['end']['lucky_50'] = 1
                 elif player.game_score == 200:
-                    print("Lucky {}! Aggregated 200 points reduced to 150".format(name))
+                    print(f"Round {round_number}\n\tLucky {name}! Aggregated 200 points reduced to 150")
                     player.game_score = 150
                     self.game_output[round_number]['end']['lucky_150'] = 1
 
@@ -272,7 +273,8 @@ class Game():
             print("Everybody loses ... ({} players left)".format(len(players)))
 
 class Round():
-    def __init__(self, players, deck, card_num_to_max_value=None, assaf_penalty=30, seed=4, verbose=0, do_stats=False, round_output=None):
+    def __init__(self, players, deck, card_num_to_max_value=None, assaf_penalty=30, seed=4, verbose=0, do_stats=False,
+                 round_output=None, play_jokers=True):
         self.seed = seed
         self.verbose = verbose
         self.assaf_penalty = assaf_penalty
@@ -286,10 +288,14 @@ class Round():
         #self.meta = {}  # meta data for logging
         self.round_output = round_output
         self.ax = None
+        self.play_jokers = play_jokers
 
     def play(self):
         # round starts with a full deck
         self.round_deck = list(self.deck)
+
+        np.random.seed(self.seed)
+        np.random.shuffle(self.round_deck)
 
         self.distribute_cards()
 
@@ -311,12 +317,14 @@ class Round():
         full_deck = self.round_deck.copy()
 
         self.round_output['start'] = {}
+        self.round_output['start']['deck_ordered'] = full_deck
+        n_players_left = len(self.players)
         for name, player in self.players.items():
             player.add_cards_to_unknown(full_deck)
 
-            self._seeding()
-            # assigning randomised selected cards to Player
-            player.cards_in_hand = np.random.choice(self.round_deck, size=num_cards, replace=False)
+            # assigning selected cards to Player
+            player.cards_in_hand = self.round_deck[::n_players_left][:num_cards]
+
             self.round_output['start'][f'{name}_cards'] = list(player.cards_in_hand)
             # calculating points in a hand of Player
             player.sum_hand_points()
@@ -325,6 +333,8 @@ class Round():
             # Deleting selected cards from the round's deck
             for card in player.cards_in_hand:
                 self.round_deck.remove(card)
+
+            n_players_left -= 1
 
         card = np.random.choice(self.round_deck, size=1, replace=False)
         self.pile_top_cards = card
@@ -387,7 +397,10 @@ class Round():
 
         prob_successful_yaniv = None
         if self.do_stats:
-            prob_successful_yaniv = self.prob_lowest_hand(name)
+            if len(self.players) > 2:
+                prob_successful_yaniv = self.prob_lowest_hand(name)
+            else:
+                prob_successful_yaniv = self.prob_lowest_hand_two_players(name)
             self.turn_output['yaniv_success_prob'] = prob_successful_yaniv
 
         player = self.players[name]
@@ -673,6 +686,15 @@ class Round():
                 player.knowledgewise_drop_cards_from_player(turn_player_name, self.pile_top_cards)
                 if self.chosen_from_pile_top:
                     player.knowledgewise_assign_card_to_player(turn_player_name, self.chosen_from_pile_top)
+
+    def prob_lowest_hand_two_players(self, name):
+        h_i = self.players[name].hand_points
+        cards_unknown = self.players[name].unknown_cards
+        other_name = list(set(self.players.keys()) - set([name]))[0]
+        n_j = len(self.players[other_name].cards_in_hand)
+
+        return calculate_p_hj_gt_hi_n_j_prior(n_j, cards_unknown, h_i=h_i, play_jokers=self.play_jokers,
+                                              verbose=self.verbose)
 
     def prob_lowest_hand(self, name):
         player_i = self.players[name]

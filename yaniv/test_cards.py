@@ -1,4 +1,4 @@
-# py.test
+# pytest
 
 from unittest import TestCase
 
@@ -11,7 +11,7 @@ from cards import (rank_to_value,
                   JOKER_RANK, JOKER_SUITE1, JOKER_SUITE2
                   )
 
-RANKS = ['A'] + map(str, range(2, 11)) + ['J', 'Q', 'K', JOKER_RANK]
+RANKS = ['A'] + list(map(str, range(2, 11))) + ['J', 'Q', 'K', JOKER_RANK]
 
 
 class TestRankToValue(TestCase):

@@ -22,6 +22,15 @@ for combos in [('A', 1), ('J', 11), ('Q', 12), ('K', 13), (JOKER_RANK, JOKER_STR
     RANK_TO_STREAK_VALUES[combos[0]] = combos[1]
 
 
+# TODO: create test
+def card_is_joker(card):
+    return JOKER_RANK in card
+
+
+def cards_to_number_jokers(cards):
+    return sum(list(map(card_is_joker, cards)))
+
+
 def card_to_color(card):
     return SUITE_CHAR_TO_COLOR[card_to_suite(card)]
 
@@ -73,7 +82,7 @@ def cards_same_rank(these_cards):
     return 1 == len(np.unique(list(map(card_to_rank, these_cards))))
 
 
-def get_deck(play_jokers=True):
+def get_deck(play_jokers=True, shuffle=False, seed=None):
     '''Return the deck in dict type
 
     :param play_jokers: bool. True: game played with 2 jokers, False: without
@@ -86,8 +95,12 @@ def get_deck(play_jokers=True):
     deck = ["{}{}".format(rank, suit) for rank in ranks for suit in suits]
 
     if play_jokers:
-        deck.append('{}{}'.format(JOKER_RANK, JOKER_SUITE1))
-        deck.append('{}{}'.format(JOKER_RANK, JOKER_SUITE2))
+        deck.insert(0, '{}{}'.format(JOKER_RANK, JOKER_SUITE1))
+        deck.insert(1, '{}{}'.format(JOKER_RANK, JOKER_SUITE2))
+
+    if shuffle:
+        np.random.seed(seed)
+        np.random.shuffle(deck)
 
     return deck
 
