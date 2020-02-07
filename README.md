@@ -7,85 +7,100 @@ For rules see the [Wikipedia page](https://en.wikipedia.org/wiki/Yaniv_(card_gam
 
 
 The main objectives for this ongoing project:     
-(1) Calculate the game statistics (present)    
-(2) Write an algorithm that will beat a human (future)     
-(3) Interactive Graphics (future)     
+* Calculate the game statistics
+* Train bots with the end goal to learn strategy
+* Make Interactive
+
 
 In the current format `yaniv` can run a game with `N` players from an overlooker's point of view.  
-One nice feature added is calculating the statistics of a Yaniv declaration being successful. 
-It is currently correct for two players, and for above, for the sake of simplicity, it (incorrectly) assumes independence of the cards of the potential Assafers. 
+One nice feature added is calculating the statistics of a Yaniv declaration from the declarer's point of view. 
+It is currently correct for two players, and requires more work for `N>2`.
 
-To run a game from main directory do:
-```python3
-from yaniv import yaniv
-
-players = ['John','Paul', 'Ringo','George']
-
-verbose = 2
-game = yaniv.Game(players, seed=1, verbose=verbose)
-game.play()
+To run a game go to the `yaniv/yaniv` directory and do:
+```bash
+python run.py
 ```
 
 This will yield the game results, round for round with a mention of the Yaniv success statistics, e.g:
 
 ```
-Players:
-John
-Paul
-Ringo
-George
-====================
-Round: 1
-Player starting the round: John
-~~~~~~~~~~
-The probability for Paul to make a successful Yaniv decleration is: 59.5%
-~~~~~~~~~~
-Round Conclusion
-Paul declared Yaniv with 7
-John 12 ['cA' 'dA' 'cJ'] 12
-Paul 0 ['c2' 'c3' 'd2'] 0
-Ringo 10 ['s2' 'sA' 'hA' 'c6'] 10
-George 12 ['h2' 'joker2' 'joker1' 'sJ'] 12
-====================
-Round: 2
-Player starting the round: Paul
-~~~~~~~~~~
-The probability for Paul to make a successful Yaniv decleration is: 76.0%
-~~~~~~~~~~
-Round Conclusion
-Paul declared Yaniv with 7
-John 15 ['s4' 'dA' 'hQ'] 27
-Paul 0 ['c2' 'h3' 'h2'] 0
-Ringo 10 ['joker2' 'd2' 'cA' 'hA' 'h6'] 20
-George 13 ['sA' 'h4' 'c5' 'joker1' 's3'] 25
+Albert (bot) strategy: picks if min pile top min value  <= 3
+----------
 
-.
-.
-.
+Roland (bot) strategy: picks if min pile top min value  <= 5
+----------
 
-Round: 23
-Player starting the round: George
-~~~~~~~~~~
-The probability for George to make a successful Yaniv decleration is: 98.5%
-~~~~~~~~~~
-Round Conclusion
-George declared Yaniv with 6
-John 20 ['c6' 'h4' 'hK'] 215
-George 0 ['d3' 'hA' 'h2'] 194
-John 215 OUT
---------------------
-The winner is: George with 194 points
+Amos (bot) strategy: picks if min pile top min value  <= 5
+----------
 
+Claude (bot) strategy: picks if min pile top min value  <= 5
+----------
+Deck of 54 cards
+['W☻', 'W☺', 'A♦', 'A♥', 'A♣', 'A♠', '2♦', '2♥', '2♣', '2♠', '3♦', '3♥', '3♣', '3♠', '4♦', '4♥', '4♣', '4♠', '5♦', '5♥', '5♣', '5♠', '6♦', '6♥', '6♣', '6♠', '7♦', '7♥', '7♣', '7♠', '8♦', '8♥', '8♣', '8♠', '9♦', '9♥', '9♣', '9♠', '10♦', '10♥', '10♣', '10♠', 'J♦', 'J♥', 'J♣', 'J♠', 'Q♦', 'Q♥', 'Q♣', 'Q♠', 'K♦', 'K♥', 'K♣', 'K♠']
+Round 7:
+	Lucky Claude! Aggregated 100 points reduced to 50
+Claude is the winner with 194 points
 ```
 
-For more or less information change verbose, where `verbose=0` is minimal information and `verbose=3` is maximum.
+For more output information change `verbose` (values 0 to 3).
 
 
-verbose:  
-0 - displays player names and the winners  
-1 - in addition to 0, displays Round information, beginning and end.  
-2 - in addition to 1, calculates and displays the probability of a Yaniv call to be successful  
-3 - in addition to 2, prints how the probability was calculated.
+# Statistics
+Within `stats` you will find code that can calculates at a given round:  
+Given a player has declared victory (yaniv!), what is the probability 
+that they truly have the lowest hand.
+
+For this you will need to update within `run.py`:
+```python
+do_stats = True
+verbose = 1
+players = ['Albert','Roland'] # currently limited to two players
+```
+
+Example output of a round 
+
+```bash
+Round: 23
+Player starting the round: Roland
+n_j=4, h_i=7, n_jokers=1 yields
+t_nj=6
+N: 36
+['3c', '8c', '3h', 'Kh', 'Qd', 'Ac', '10d', '5d', 'Ks', 'Jd', 'Qc', '3s', 'Qs', 'Kd', '5h', '8h', '5s', 'Wb', '4d', '10c', '2d', 'Ad', '9h', 'As', '4h', 'Jc', 'Kc', '7d', '7c', '4c', '2c', '2h', '6d', '6c', '3d', '10s']
+n: 17
+['3c', '3h', 'Ac', '5d', '3s', '5h', '5s', 'Wb', '4d', '2d', 'Ad', 'As', '4h', '4c', '2c', '2h', '3d']
+total: 2380
+successes: 2179
+P(h_j>h_i|U)=0.916
+N=36, K=17, n_j=4, yields:
+p(U)=0.040
+P(h_j>h_i=7|n_j, cards)=0.997
+~~~~~~~~~~
+Round Conclusion
+Albert declared Yaniv with 7
+Albert 0 ['2♠', 'W☻', '4♠', 'A♥'] 185
+Roland 15 ['2♥', '5♥', '3♠', '5♣'] 138
+```
+
+From here we learn that:
+* Roland started the round,
+* Albert declared yaniv
+  * with a hand of `h_i=7`
+  * was unaware of `N=36` cards 
+  * (of which Roland had `n_j=4` cards in hand).
+ * Given those facts from Albert's POV the probability of the decleration being successful is `P(h_j>h_i=7|n_j, cards)=0.997`
+ * Roland has `h_j=15` from cards ['2♥', '5♥', '3♠', '5♣']
+ * Resulting in Albert not getting any points where Roland got 15 (all points are bad).
+
+
+# Human play
+
+There is some preliminary human playing mode, but still requires more work. 
+
+For a quick peek set one of the players to `human`, like this:
+```python
+players = {'<Your Name>': 'human','Roland':'bot', 'Amos':'bot','Claude':'bot'}
+```
+
 
 # Requirements 
 python 3
@@ -96,9 +111,10 @@ python 3
 
 # Testing
 Run bash command 
-```
+```bash
 py.test
 ```
+(or `pyteset`)
 
 
 # Credits 

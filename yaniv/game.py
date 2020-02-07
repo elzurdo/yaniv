@@ -106,7 +106,7 @@ class Game():
         self.generate_players(players)
         self.deck = get_deck(play_jokers=play_jokers, shuffle=False, seed=self.seed)
         if 1:
-            print(f'Deck of {len(self.deck)} cards\n{self.deck}')
+            print(f'Deck of {len(self.deck)} cards\n{list(map(card_to_pretty, self.deck))}')
         self.game_output = {}
 
     def play(self):
@@ -241,10 +241,10 @@ class Game():
                 # If a player hits these luck values their score is reduced
                 if player.game_score == 100:
                     player.game_score = 50
-                    print("Lucky {}! Aggregated 100 points reduced to 50".format(name))
+                    print(f"Round {round_number}:\n\tLucky {name}! Aggregated 100 points reduced to 50")
                     self.game_output[round_number]['end']['lucky_50'] = 1
                 elif player.game_score == 200:
-                    print("Lucky {}! Aggregated 200 points reduced to 150".format(name))
+                    print(f"Round {round_number}\n\tLucky {name}! Aggregated 200 points reduced to 150")
                     player.game_score = 150
                     self.game_output[round_number]['end']['lucky_150'] = 1
 

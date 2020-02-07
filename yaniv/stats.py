@@ -207,7 +207,7 @@ def calculate_p_hj_gt_hi_n_j_prior(n_j, cards, h_i=None, play_jokers=True, verbo
     p_hj_gt_hi = p_hj_gt_hi_conditioned_U * p_U + 1 - p_U
 
     if verbose:
-        print(f'P(hj>hi={h_i}|n_j, cards)={p_hj_gt_hi:0.3f}')
+        print(f'P(h_j>h_i={h_i}|n_j, cards)={p_hj_gt_hi:0.3f}')
 
     return p_hj_gt_hi
 
