@@ -7,8 +7,10 @@ from cards import (get_deck, card_to_pretty,
                    cards_to_valid_throw_combinations,
                    sort_card_combos,
                    card_to_value,
+                   cards_to_values,
                    cards_same_rank,
-                   sort_cards
+                   sort_cards,
+                   pile_cards_plus_player_collective_hypothetical_points
                    )
 
 from stats import (card_number_to_max_card_value_to_declare_yaniv,
@@ -220,6 +222,7 @@ class Game():
             self.round = Round(players, self.deck, assaf_penalty=self.assaf_penalty,
                                card_num_to_max_value=card_num_to_max_value, verbose=self.verbose, seed=self.seed,
                                round_output=self.game_output[round_number], do_stats=self.do_stats, play_jokers=self.play_jokers)
+            self.round.number = round_number
             self.round.play()
 
             #"""
@@ -510,8 +513,10 @@ class Round():
 
         for name, player in players_ordered.items():
             turn += 1
+            self.turn_number = turn
             self.round_output[turn] = {}
             self.turn_output = self.round_output[turn]
+
             self.turn_output['name'] = name
             self.turn_output['pile_top_accessible'] = list(self.pile_top_accessible_cards())
             #self.turn_output[name] = list(player.cards_in_hand) # this might be redundant information
@@ -603,6 +608,7 @@ class Round():
     # TODO: devise better strategies for pulling cards
     def pull_card(self, name):
         player = self.players[name]
+        self.turn_player = player
 
         self.chosen_from_pile_top = None
 
@@ -669,7 +675,20 @@ class Round():
         else:
             accessible_cards = self.pile_top_accessible_cards()
         # ======== here we will need to introduce strategy of best card to choose ============
-        this_card = np.random.choice(accessible_cards)
+        player_cards = self.turn_player.cards_in_hand
+        cards_plus_player_collective_points_ = pile_cards_plus_player_collective_hypothetical_points(accessible_cards, player_cards)
+
+        if bool(cards_plus_player_collective_points_):
+            this_card = next(iter(cards_plus_player_collective_points_))
+        else:
+            if len(accessible_cards) == 1:
+                this_card = accessible_cards[0]
+            else:
+                this_card = sorted(accessible_cards, key=lambda card: card_to_value(card), reverse=False)[0]
+
+        # print(self.number, self.turn_number, self.pile_top_cards, accessible_cards, player_cards, cards_plus_player_collective_points_, this_card)
+
+
         # =====================================
         self.pile_top_cards = list(set(self.pile_top_cards) - set([this_card]))
         self.chosen_from_pile_top = this_card

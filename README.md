@@ -116,6 +116,15 @@ py.test
 ```
 (or `pyteset`)
 
+# Strategies Currently Used
+* Pull card: 
+    * bots are assigned a maximum value used to pull from pile, otherwise default from deck (currently between 3 and 5; see `game.Player.pile_pull_strategy`, `game.Round.pull_card`)
+    * if choosing from pile and there is more than one accessible card, bots hypothesise the best combination for the next round (`game.Round.pull_card_from_pile_top`)
+* Throw card: bots throw the highest valued valid combination (`game.Round.throw_cards_to_pile`)
+  
+
+# Comments
+* Jokers values are currently 0, but not used yet a s wild cards for streaks (i.e, no use in `cards.cards_to_consecutive_combinations`)
 
 # Credits 
 Image credit: Barak Edry from his excellent [App Store game of Yaniv](https://itunes.apple.com/gb/app/yaniv/id397614908?mt=8)
