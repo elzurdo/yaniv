@@ -5,6 +5,54 @@ from stats import calculate_p_hj_gt_hi_n_j_prior
 from cards import cards_to_number_jokers, cards_to_value_sum
 
 
+def _round_output_turn_keys_to_int(round_output):
+    str_keys = ['start', 'winner', 'end']
+
+    turn_keys = []
+    for key in round_output.keys():
+        if key not in str_keys:
+            turn_keys.append(int(key))
+
+    turn_keys = sorted(turn_keys)
+
+    round_output_ = {'start': round_output['start']}
+
+    for turn in turn_keys:
+        round_output_[turn] = round_output[f'{turn}']
+
+    if 'winner' in round_output.keys():
+        round_output_['winner'] = round_output['winner']
+    if 'end' in round_output.keys():
+        round_output_['end'] = round_output['end']
+
+    return round_output_
+
+
+def _game_output_round_keys_to_int(game_output):
+
+    round_keys = []
+    for round in game_output.keys():
+        round_keys.append(int(round))
+
+        round_keys = sorted(round_keys)
+
+    game_output_ = {}
+    for round in round_keys:
+        game_output_[round] = game_output[f'{round}']
+
+    return game_output_
+
+
+def game_output_keys_to_int(game_output):
+    game_output = _game_output_round_keys_to_int(game_output)
+
+    for round in game_output.keys():
+        game_output[round] = _round_output_turn_keys_to_int(game_output[round])
+
+    return game_output
+
+
+
 def round_to_number_of_turns(round_output):
     return np.sum(list(map(lambda x: isinstance(x, int), list(round_output.keys()))))
 
