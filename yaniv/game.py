@@ -20,11 +20,10 @@ from stats import (card_number_to_max_card_value_to_declare_yaniv,
                    calculate_p_hj_gt_hi_n_j_prior
                    )
 
-ASSAF_PENALTY = 30
-END_GAME_SCORE = 200
-MAX_ROUNDS = 100
-MAX_TURNS = 40
-YANIV_LIMIT = 7  # the value in which one can call Yaniv!
+
+from configs import (ASSAF_PENALTY, END_GAME_SCORE, MAX_ROUNDS, MAX_TURNS, YANIV_LIMIT)
+
+from strategies import (pile_conservative_vary, pile_conservative_constant, pile_always)
 
 
 # TODO: design and implement different throw_strategy
@@ -32,20 +31,11 @@ YANIV_LIMIT = 7  # the value in which one can call Yaniv!
 # TODO: design and implement different pile_pull_strategy
 # TODO: figure out and implement how to change strategy as game progresses (so to maximise utility)
 class Player():
-    def __init__(self, name, agent='bot', throw_strategy='highest_card', yaniv_strategy='not_always', prob_success_thresh=0.2, seed=None):
-        assert yaniv_strategy in ['always', 'not_always']
+    def __init__(self, name, agent='bot'):
         assert agent in ['bot', 'human']
 
-        if seed:
-            np.random.seed(seed)
         self.name = name
         self.agent = agent
-
-        if 'bot' == self.agent:
-            self.throw_strategy = throw_strategy
-            self.pile_pull_strategy = {"highest_card_value_to_pull": np.random.randint(3, 6)}
-            self.yaniv_strategy = yaniv_strategy
-            self.prob_successful_yaniv_thresh = prob_success_thresh
 
         self.starts_round = False
         self.unknown_cards = []
@@ -141,17 +131,11 @@ class Game():
 
         for idx, name in enumerate(input_players):
             self._seeding()
-            player = Player(name, agent=input_players[name], seed=self.seed)
+            player = Player(name, agent=input_players[name])
             player.id = idx
             self.all_players.append(player)
-            str_strategy = ''
-            if 'bot' == player.agent:
-                str_strategy = f' strategy: picks if min pile top min value  <= {player.pile_pull_strategy["highest_card_value_to_pull"]}'
 
-            print(f'\n{name} ({player.agent}){str_strategy}')
-            #print("Highest value card will pick from pile: {}".format(player_.pull_strategy["highest_card_value_to_pull"]))
-
-            print("-" * 10)
+            print(f'{name} ({player.agent})')
 
     def initiate_players_status(self):
         '''Initiates the status of all the players
@@ -408,10 +392,10 @@ class Round():
 
         player = self.players[name]
         if 'bot' == player.agent:
-            if ('always' == player.yaniv_strategy) or (prob_successful_yaniv is None):
+            if ('always' == player.strategy['yaniv_declare']) or (prob_successful_yaniv is None):
                 return True
             else:
-                if prob_successful_yaniv >= player.prob_successful_yaniv_thresh:
+                if prob_successful_yaniv >= player.strategy['prob_successful_yaniv_thresh']:
                     return True
         else:
             id_to_result = {'1': True, '2': False}
@@ -517,6 +501,8 @@ class Round():
             self.round_output[turn] = {}
             self.turn_output = self.round_output[turn]
 
+            player.strategy = pile_conservative_constant()
+
             self.turn_output['name'] = name
             self.turn_output['pile_top_accessible'] = list(self.pile_top_accessible_cards())
             #self.turn_output[name] = list(player.cards_in_hand) # this might be redundant information
@@ -524,6 +510,11 @@ class Round():
                 self.turn_output[f'{name_j}_ncards'] = len(list(player_j.cards_in_hand))
                 self.turn_output[f'{name_j}_cards'] = list(player_j.cards_in_hand)
             # self._log_meta_data(player)
+
+            # ================
+            # player.action(yaniv_declared)
+            # ================
+
             if not yaniv_declared:
                 if player.hand_points <= YANIV_LIMIT:
                     # name considers declearing yaniv based on their Player.yaniv_strategy probability of success
@@ -635,7 +626,7 @@ class Round():
             card_values = [card_to_value(card) for card in self.pile_top_cards]
             idx_lowest = np.array(card_values).argmin()
 
-            if player.pile_pull_strategy['highest_card_value_to_pull'] >= card_values[idx_lowest]:
+            if player.strategy["pile_pull"]["highest_card_value_to_pull"]  >= card_values[idx_lowest]:
                 pull_card_function = self.pull_card_from_pile_top
             else:
                 pull_card_function = self.pull_card_from_deck
