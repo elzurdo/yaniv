@@ -105,9 +105,9 @@ def get_deck(play_jokers=True, shuffle=False, seed=None):
     return deck
 
 
-def sort_cards(cards, return_streak_values=False):
+def sort_cards(cards, return_streak_values=False, descending=False):
     streak_values = list(map(lambda x: card_to_streak_value(x), cards))
-    cards = [card for _, card in sorted(zip(streak_values, cards), key=lambda pair: pair[0])]
+    cards = [card for _, card in sorted(zip(streak_values, cards), key=lambda pair: pair[0], reverse=descending)]
 
     if return_streak_values:
         return cards, sorted(streak_values)
@@ -143,8 +143,11 @@ def cards_to_same_rank_combinations(cards):
     return same_rank_combinations
 
 
-def cards_to_consecutive_combinations(cards):
+def cards_to_consecutive_combinations(cards, verbose=0):
     cards, streak_values = sort_cards(cards, return_streak_values=True)
+
+    if verbose:
+        print(f'cards: {cards}\nstreak_values:{streak_values}')
     suites = list(map(card_to_suite, cards))
 
     consecutive_combinations = []
@@ -155,14 +158,28 @@ def cards_to_consecutive_combinations(cards):
 
         this_suite_card_streakValues = [(card, streak_value) for card, suite, streak_value in zip(cards, suites, streak_values) if suite == this_suite]
         this_suite_cards, this_suite_streakValues = list(zip(*this_suite_card_streakValues))
-        # print(this_suite, this_suite_cards, this_suite_streakValues)
 
         for k, g in groupby(enumerate(this_suite_streakValues), lambda x: x[0 ] -x[1]):
-            grouped_values = list(map(itemgetter(1), g))
+            grouped_values_one_group = list(map(itemgetter(1), g))
+            # print('grouped_values_one_group', grouped_values_one_group)
 
-        if len(grouped_values) >= 3:
-            consecutive_combiation = [card for card, streak_value in zip(this_suite_cards, this_suite_streakValues) if streak_value in grouped_values]
-            consecutive_combinations.append(consecutive_combiation)
+            len_grouped_values_one_group = len(grouped_values_one_group)
+            l_grouped_values = []
+            if len_grouped_values_one_group >= 3:
+                combo_sizes = range(3, len_grouped_values_one_group + 1)
+
+                for combo_size in combo_sizes:
+                    for idx_first in range(0, len_grouped_values_one_group - combo_size + 1):
+                        start_ = grouped_values_one_group[idx_first]
+                        stop_ = grouped_values_one_group[idx_first + combo_size - 1]
+                        l_grouped_values.append(list(range(start_, stop_ + 1)))
+
+                for grouped_values in l_grouped_values:
+                    consecutive_combiation = [card for card, streak_value in
+                                              zip(this_suite_cards, this_suite_streakValues) if
+                                              streak_value in grouped_values]
+                    consecutive_combinations.append(consecutive_combiation)
+
 
     return consecutive_combinations
 
@@ -184,7 +201,6 @@ def cards_to_valid_throw_combinations(cards):
     return valid_combinations
 
 
-# TODO: create test
 def pile_top_accessible_cards(pile_top_cards):
     pile_top_cards_accessible = pile_top_cards.copy()
     if len(pile_top_cards_accessible) > 2:
@@ -194,3 +210,31 @@ def pile_top_accessible_cards(pile_top_cards):
             pile_top_cards_accessible = [cards_sorted[0], cards_sorted[-1]]
 
     return pile_top_cards_accessible
+
+
+
+def pile_cards_plus_player_collective_hypothetical_points(accessible_cards, player_cards):
+    """Returns dictionary {card: max_possible_combo_points}
+    card is yielded only if max_possible_combo_points comes from a card combination of at least 2 cards including
+    one from accessible_cards.
+
+    :param accessible_cards:
+    :param player_cards:
+    :return:
+    """
+    pile_card_to_player_max_collective_points = {}
+
+
+    for card in accessible_cards:
+        hypothetical_hand_cards = player_cards + [card]
+        hypothetical_valid_combinations = cards_to_valid_throw_combinations(hypothetical_hand_cards)
+        hypothetical_valid_combinations_with_card = [combination_ for combination_ in
+                                                     hypothetical_valid_combinations
+                                                     if (card in combination_) & (len(combination_) > 1)]
+
+        hypothetical_combos_points = list(map(lambda cards: np.sum(cards_to_values(cards)), hypothetical_valid_combinations_with_card))
+
+        if bool(hypothetical_combos_points):
+            pile_card_to_player_max_collective_points[card] = max(hypothetical_combos_points)
+
+    return pile_card_to_player_max_collective_points
