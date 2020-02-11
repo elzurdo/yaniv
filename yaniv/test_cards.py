@@ -8,6 +8,8 @@ from cards import (rank_to_value,
                    card_to_value,
                    cards_to_value_sum,
                    cards_to_consecutive_combinations,
+                   pile_top_accessible_cards,
+                   sort_cards,
                    SUITE_CHAR_TO_SYMBOL,
                    JOKER_RANK, JOKER_SUITE1, JOKER_SUITE2
                    )
@@ -103,3 +105,35 @@ class TestCardstoConsecutiveCombinations(TestCase):
 
         for combo in ligit_combos:
             self.assertIn(combo, result)
+
+
+class TestPileTopAccessibleCards(TestCase):
+    def test(self):
+        pile_cards = ['As', '2s', '3s']
+        result = pile_top_accessible_cards(pile_cards)
+
+        self.assertEqual(['As', '3s'], result)
+
+    def test2(self):
+        pile_cards = ['As', 'Ad', 'Ah']
+        result = pile_top_accessible_cards(pile_cards)
+
+        self.assertEqual(pile_cards, result)
+
+    def test3(self):
+        pile_cards = ['9s', '10s', 'Js', 'Qs']
+        result = pile_top_accessible_cards(pile_cards)
+
+        self.assertEqual(['9s', 'Qs'], result)
+
+
+class TesetSortCards(TestCase):
+    def test(self):
+        the_cards = ['5d', '3h', 'Kh', 'As', 'Qh']
+
+        result = sort_cards(the_cards, descending=True)
+        self.assertEqual(['Kh', 'Qh', '5d', '3h', 'As'], result)
+
+        result = sort_cards(the_cards, descending=False)
+        self.assertEqual(['As', '3h', '5d', 'Qh', 'Kh'], result)
+

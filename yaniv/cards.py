@@ -105,9 +105,9 @@ def get_deck(play_jokers=True, shuffle=False, seed=None):
     return deck
 
 
-def sort_cards(cards, return_streak_values=False):
+def sort_cards(cards, return_streak_values=False, descending=False):
     streak_values = list(map(lambda x: card_to_streak_value(x), cards))
-    cards = [card for _, card in sorted(zip(streak_values, cards), key=lambda pair: pair[0])]
+    cards = [card for _, card in sorted(zip(streak_values, cards), key=lambda pair: pair[0], reverse=descending)]
 
     if return_streak_values:
         return cards, sorted(streak_values)
@@ -201,7 +201,6 @@ def cards_to_valid_throw_combinations(cards):
     return valid_combinations
 
 
-# TODO: create test
 def pile_top_accessible_cards(pile_top_cards):
     pile_top_cards_accessible = pile_top_cards.copy()
     if len(pile_top_cards_accessible) > 2:
