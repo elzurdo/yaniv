@@ -553,10 +553,11 @@ class Round():
 
     def throw_cards_to_pile(self, name, cards_to_throw=None):
         player = self.players[name]
-        valid_combinations = cards_to_valid_throw_combinations(player.cards_in_hand)
-        sorted_combinations, sorted_combinations_sums = sort_card_combos(valid_combinations, descending=True, return_sum_values=True)
 
         if cards_to_throw is None:
+            valid_combinations = cards_to_valid_throw_combinations(player.cards_in_hand)
+            sorted_combinations, sorted_combinations_sums = sort_card_combos(valid_combinations, descending=True,
+                                                                             return_sum_values=True)
             if 'human' == player.agent:
                 options = {f'{idx}': option for idx, option in enumerate(sorted_combinations, 1)}
                 option_id = self.io_options(options, player, option_type='throw')
