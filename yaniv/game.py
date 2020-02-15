@@ -98,7 +98,7 @@ class Game():
 
         self.generate_players(players)
         self.deck = get_deck(play_jokers=play_jokers, shuffle=False, seed=self.seed)
-        if 1:
+        if verbose:
             print(f'Deck of {len(self.deck)} cards\n{list(map(card_to_pretty, self.deck))}')
         self.game_output = {}
 
@@ -124,7 +124,9 @@ class Game():
         '''
 
         self.all_players = []
-        print('generating players and their playing strategies:')
+
+        if self.verbose:
+            print('generating players and their playing strategies:')
 
         if isinstance(input_players, list):
             input_players = {name: 'bot' for name in input_players}
@@ -136,7 +138,8 @@ class Game():
             player.id = idx
             self.all_players.append(player)
 
-            print(f'{name} ({player.agent})')
+            if self.verbose:
+                print(f'{name} ({player.agent})')
 
 
     # TODO: randomise the first player (otherwise might bias the results)

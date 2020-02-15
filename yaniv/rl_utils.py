@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -8,7 +9,7 @@ from cards import (pile_top_accessible_cards,
                    cards_to_valid_throw_combinations,
                    sort_card_combos, card_to_value
                    )
-from configs import YANIV_LIMIT, ASSAF_PENALTY, END_GAME_SCORE
+from configs import YANIV_LIMIT, ASSAF_PENALTY
 
 
 REWARD_FACTOR_YANIV_INCORRECT_PENALTY = -51
@@ -69,6 +70,17 @@ def new_round(env, name='Albert', seed=None):
     return name, (n_deck, top_accessible_cards, cards_in_hand, n_cards_opponent)
 
 
+def next_starter_name(env, pervious_starter=None, previous_winner=None, seed=None, method='alternate'):
+    assert method in ['winner', 'alternate', 'random']
+
+    if 'winner' == method:
+        return previous_winner
+    elif 'alternate' == method:
+        return _name_to_opponent_name_two_players(pervious_starter, env.players)
+    elif 'random' == method:
+        np.random.seed(seed)
+        return np.random.choice(list(env.players.keys()))
+
 def step(env, name, action):
     info = {'yaniv_declare_correct': None}
 
@@ -113,7 +125,7 @@ def step(env, name, action):
     # --- setting up opponent ---
     opponent_name = _name_to_opponent_name_two_players(name, env.players)
 
-    n_deck = len(env.round_.deck)
+    n_deck = len(env.round_.round_deck)
     top_accessible_cards = pile_top_accessible_cards(env.round_.pile_top_cards)
     cards_in_hand = env.players[opponent_name].cards_in_hand
 
@@ -123,7 +135,8 @@ def step(env, name, action):
 
 
 
-def basic_policy(observables, seed=None, yaniv_thresh=None, throw_out='highest', pickup='random'):
+def basic_policy(observables, turn_number, seed=None, yaniv_thresh=None, throw_out='highest_combination',
+                 pickup='random', deck_prob=0.5):
     assert throw_out in ['highest_card', 'highest_combination', 'random_card']
     assert pickup in ['random', 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
@@ -155,7 +168,7 @@ def basic_policy(observables, seed=None, yaniv_thresh=None, throw_out='highest',
 
     # picking from deck at random
     if 'random' == pickup:
-        pick_from_deck = np.random.binomial(1, 0.5)
+        pick_from_deck = np.random.binomial(1, deck_prob)
     else:
         card_values = [card_to_value(card) for card in top_accessible_cards]
         idx_lowest = np.array(card_values).argmin()
@@ -168,51 +181,79 @@ def basic_policy(observables, seed=None, yaniv_thresh=None, throw_out='highest',
     return (yaniv_call, cards_to_throw, pick_from_deck)
 
 
-
-def run_basic_comparison(players, seed=1, play_jokers=False, verbose=0, n_rounds=20, n_turns_max=100,
-                         end_game_score=None, do_stats=False):
-    if end_game_score is None:
-        end_game_score = END_GAME_SCORE
-
-
-    game_seed = seed
-    env = game.Game(players, seed=game_seed, verbose=verbose, end_game_score=end_game_score,
-                    do_stats=do_stats, play_jokers=play_jokers)
+def get_game_setup(player_names, seed=None, play_jokers=False, do_stats=False, verbose=0):
+    env = game.Game(player_names, seed=seed, verbose=verbose, do_stats=do_stats, play_jokers=play_jokers)
 
     env.initiate_players_status()
     env.players = env.get_round_players()
 
+    return env
+
+
+def get_random_round_environment(player_names, name, seed=1, play_jokers=False, verbose=0, turn_stop=3, do_stats=False):
+    player_yaniv_thresh = {'Albert': None, 'Roland': None}  # {'Albert': 7, 'Roland': 7}
+    player_throw_out_strategy = {'Albert': 'highest_combination', 'Roland': 'highest_combination'}
+    player_pickup_strategy = {'Albert': 4, 'Roland': 4}
+
+    game_setup = get_game_setup(player_names, seed=seed, play_jokers=play_jokers, do_stats=do_stats, verbose=verbose)
+
+    turn_seed = seed + 1
+    next_name, observables = new_round(game_setup, name=name, seed=turn_seed)
+
+    for turn in range(1, turn_stop + 1):
+        game_setup.round_.turn_output = {}
+
+        turn_seed += 1
+        name = next_name
+
+        yaniv_thresh = player_yaniv_thresh[name]
+        throw_out_strategy = player_throw_out_strategy[name]
+        pickup_strategy = player_pickup_strategy[name]
+
+        action = basic_policy(observables, turn,
+                              yaniv_thresh=yaniv_thresh,
+                              throw_out=throw_out_strategy,
+                              pickup=pickup_strategy,
+                              seed=turn_seed)
+
+        next_name, observables, reward, done, info = step(game_setup, name, action)
+
+    return game_setup, observables, done
+
+
+def run_basic_comparison(players, seed=1, play_jokers=False, verbose=0, n_rounds=20, n_turns_max=100, do_stats=False, start_method='alternate'):
+    game_setup = get_game_setup(players, seed=seed, play_jokers=play_jokers, do_stats=do_stats, verbose=verbose)
+
     player_total_rounds_rewards = {}
-    for name in env.players.keys():
+    for name in game_setup.players.keys():
         player_total_rounds_rewards[name] = []
     yaniv_declarers = []
     round_winners = []
-    player_yaniv_thresh = {'Albert': 7, 'Roland': 7}  # {'Albert': 7, 'Roland': 7}
+    player_yaniv_thresh = {'Albert': None, 'Roland': None}  # {'Albert': 7, 'Roland': 7}
     player_throw_out_strategy = {'Albert': 'highest_combination', 'Roland': 'highest_combination'}
-    player_pickup_strategy = {'Albert': 4, 'Roland': 6}
+    player_pickup_strategy = {'Albert': 4, 'Roland': 4}
 
-    turn_seed = seed
+    turn_seed = seed + 1
     round_winner = None
+    name_start = list(game_setup.players.keys())[:-1][0]
+
     for round_number in range(1, n_rounds + 1):
+        name_start = next_starter_name(game_setup, pervious_starter=name_start, previous_winner=round_winner, seed=turn_seed,
+                                       method=start_method)
 
-        if round_winner is not None:
-            name_start = round_winner
-        else:
-            np.random.seed(turn_seed)
-            name_start = np.random.choice(list(env.players.keys()))
-        next_name, observables = new_round(env, name=name_start, seed=turn_seed)
+        next_name, observables = new_round(game_setup, name=name_start, seed=turn_seed)
 
-        env.round_.round_output[round_number] = {}
+        game_setup.round_.round_output[round_number] = {}
 
         player_round_rewards = {}
-        for name in env.players.keys():
+        for name in game_setup.players.keys():
             player_round_rewards[name] = 0
 
         yaniv_declarer = None
         round_winner = None
 
         for turn in range(1, n_turns_max + 1):
-            env.round_.turn_output = {}
+            game_setup.round_.turn_output = {}
             turn_seed += 1
             name = next_name
 
@@ -220,29 +261,30 @@ def run_basic_comparison(players, seed=1, play_jokers=False, verbose=0, n_rounds
             throw_out_strategy = player_throw_out_strategy[name]
             pickup_strategy = player_pickup_strategy[name]
 
-            action = basic_policy(observables,
+            #print(observables)
+            action = basic_policy(observables, turn,
                                   yaniv_thresh=yaniv_thresh,
                                   throw_out=throw_out_strategy,
                                   pickup=pickup_strategy,
                                   seed=turn_seed)
-            # print(action)
-            next_name, observables, reward, done, info = step(env, name, action)
+
+            next_name, observables, reward, done, info = step(game_setup, name, action)
             player_round_rewards[name] += reward
 
-            env.round_.round_output[round_number][turn] = env.round_.turn_output
+            game_setup.round_.round_output[round_number][turn] = game_setup.round_.turn_output
             if done:
                 yaniv_declarer = name
                 if info['yaniv_declare_correct'] == False:
                     print('incorrect sum for Yaniv')
 
                 # TODO - update in case of info['yaniv_declare_correct'] == False
-                for name in env.players.keys():
-                    player_round_rewards[name] -= env.players[name].hand_points
+                for name in game_setup.players.keys():
+                    player_round_rewards[name] -= game_setup.players[name].hand_points
 
-                round_winner = env.round_.round_output['winner']
+                round_winner = game_setup.round_.round_output['winner']
                 break
         if info['yaniv_declare_correct'] is None:
-            for name in env.players.keys():
+            for name in game_setup.players.keys():
                 player_round_rewards[name] += REWARD_NO_WINNER
 
         # Testing to verify that all Assafs are different
@@ -255,11 +297,43 @@ def run_basic_comparison(players, seed=1, play_jokers=False, verbose=0, n_rounds
         round_winners.append(round_winner)
         yaniv_declarers.append(yaniv_declarer)
 
-        for name in env.players.keys():
+        for name in game_setup.players.keys():
             player_total_rounds_rewards[name].append(player_round_rewards[name])
+
+
 
     df_results0 = pd.DataFrame(player_total_rounds_rewards)
     df_results0['declarer'] = yaniv_declarers
     df_results0['winner'] = round_winners
 
     return df_results0
+
+
+def show_rounds_results(df_results):
+    player_names = list(df_results.columns)
+    player_names.remove('declarer')
+    player_names.remove('winner')
+
+    n_rounds_total = len(df_results)
+    idx_declaration = df_results[df_results['declarer'].notnull()].index
+    n_rounds_declared = len(idx_declaration)
+
+    print(f'declared percentage: {100. * n_rounds_declared/n_rounds_total:0.1f}% of total {n_rounds_total:,} rounds')
+
+    df_results = df_results.loc[idx_declaration]
+
+    # The Assaf rate
+    sr_assaf_counts = df_results[df_results['declarer'] != df_results['winner']]['winner'].value_counts(normalize=False)
+    print('--- Assaf rate ---')
+    print(f'{100. * sr_assaf_counts.sum() / n_rounds_declared:0.1f}%')
+    print(sr_assaf_counts)
+
+    # Winner rate
+    sr_winner_rate = df_results['winner'].value_counts()
+    print('--- Winner rate ---')
+    print(sr_winner_rate)
+    print(sr_winner_rate / n_rounds_declared)
+
+    for name in player_names:
+        plt.hist(df_results[name], histtype='step', linewidth=3, label=name)
+    plt.legend(loc='upper left')
