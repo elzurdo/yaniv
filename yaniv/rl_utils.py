@@ -554,7 +554,7 @@ def get_multiple_environment_vars(n_envs, players_names, name, seed=None):
 
 def train_deck_pickup_dnn_to_player(n_iters, n_envs, n_inputs,
                                     basic_strategy=4, yaniv_thresh=None, throw_out_strategy='highest_combination',
-                                    max_turn = 40, seed=None
+                                    max_turn = 40, collect_data=False, seed=None
                                     ):
     """
     Assuming simulation of two players, it will train a model to follow the deck pickup basic strategy of the first
@@ -595,6 +595,11 @@ def train_deck_pickup_dnn_to_player(n_iters, n_envs, n_inputs,
 
     l_losses = []  # for plotting
 
+    if collect_data:
+        columns =['n_deck', 'card_lowest', 'turn_number', 'n_cards_i', 'n_cards_j']
+        df_data = pd.DataFrame(columns=columns)
+        l_targets = []
+
     for iteration in range(n_iters):
         target_probas = []
         for ienv, (observables, turn_number) in enumerate(zip(l_observables, l_turn)):
@@ -603,6 +608,9 @@ def train_deck_pickup_dnn_to_player(n_iters, n_envs, n_inputs,
                                          pickup=basic_strategy, deck_prob=None)
             target_probas.append(target_action[-1])
 
+        if collect_data:
+            l_targets += target_probas
+            
         target_probas = np.array(target_probas).reshape(-1, 1)
 
         inputs = np.zeros([len(l_observables), n_inputs])
@@ -611,6 +619,9 @@ def train_deck_pickup_dnn_to_player(n_iters, n_envs, n_inputs,
             this_input = observables_to_model_input(observables, turn_number, reshape=False)
             inputs[idx, :] = this_input
             idx += 1
+
+        if collect_data:
+            df_data = df_data.append(pd.DataFrame(inputs, columns=columns), ignore_index=True)
 
         with tf.GradientTape() as tape:
             deck_pick_probas = deck_pickup_dnn(np.array(inputs))
@@ -666,6 +677,10 @@ def train_deck_pickup_dnn_to_player(n_iters, n_envs, n_inputs,
             l_observables[ienv] = observables
             l_turn[ienv] = turn_number
 
+
+    if collect_data:
+        df_data['target_probs'] = l_targets
+        return deck_pickup_dnn, l_losses, df_data
 
     return deck_pickup_dnn, l_losses
 
