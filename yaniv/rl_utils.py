@@ -1,6 +1,13 @@
-import matplotlib.pyplot as plt
-import numpy as np
+try:
+    import matplotlib.pyplot as plt
+except:
+    print('did not manage to import matplotlib.pyplot.\ncontinuing without')
+from tensorflow import keras
+import tensorflow as tf
 import pandas as pd
+import numpy as np
+
+assert tf.__version__ >= "2.0"
 
 import game
 from cards import (pile_top_accessible_cards,
@@ -197,13 +204,17 @@ def get_random_round_environment(player_names, name, seed=1, play_jokers=False, 
 
     game_setup = get_game_setup(player_names, seed=seed, play_jokers=play_jokers, do_stats=do_stats, verbose=verbose)
 
-    turn_seed = seed + 1
+    if seed:
+        turn_seed = seed + 1
+    else:
+        turn_seed = None
     next_name, observables = new_round(game_setup, name=name, seed=turn_seed)
 
     for turn in range(1, turn_stop + 1):
         game_setup.round_.turn_output = {}
 
-        turn_seed += 1
+        if turn_seed:
+            turn_seed += 1
         name = next_name
 
         yaniv_thresh = player_yaniv_thresh[name]
@@ -309,7 +320,7 @@ def run_basic_comparison(players, seed=1, play_jokers=False, verbose=0, n_rounds
     return df_results0
 
 
-def show_rounds_results(df_results):
+def show_rounds_results(df_results, plot=False):
     player_names = list(df_results.columns)
     player_names.remove('declarer')
     player_names.remove('winner')
@@ -334,6 +345,328 @@ def show_rounds_results(df_results):
     print(sr_winner_rate)
     print(sr_winner_rate / n_rounds_declared)
 
-    for name in player_names:
-        plt.hist(df_results[name], histtype='step', linewidth=3, label=name)
-    plt.legend(loc='upper left')
+    if plot:
+        for name in player_names:
+            plt.hist(df_results[name], histtype='step', linewidth=3, label=name)
+        plt.legend(loc='upper left')
+
+
+def observables_to_model_input(observables, turn_number, reshape=True):
+    n_deck = observables[0]
+    top_accessible_cards = observables[1]
+    cards_in_hand = observables[2]
+    n_cards_opponent = observables[3]
+
+    card_values = [card_to_value(card) for card in top_accessible_cards]
+    idx_lowest = np.array(card_values).argmin()
+    card_value_lowest = card_values[idx_lowest]
+
+    input_ = np.array((n_deck, card_value_lowest, turn_number, len(cards_in_hand), n_cards_opponent))
+
+    if reshape:
+        input_ = input_.reshape(1, -1)
+
+    return input_
+
+
+def ann_policy(model, observables, turn_number, seed=None, yaniv_thresh=None, throw_out='highest_combination'):
+    """Takes in one set of obervables
+
+    :param model:
+    :param observables:
+    :param turn_number:
+    :param seed:
+    :param yaniv_thresh:
+    :param throw_out:
+    :return:
+    """
+    input_ = observables_to_model_input(observables, turn_number)
+
+    deck_prob = model.predict(input_)[0]
+
+    action = basic_policy(observables, turn_number, seed=seed, yaniv_thresh=yaniv_thresh,
+                          throw_out=throw_out, pickup='random', deck_prob=deck_prob)
+
+    return action
+
+
+def run_ann_policy(player_names, model, seed=1, play_jokers=False, n_rounds=20, n_turns_max=100,
+                   start_method='alternate', verbose=0, fixed_pickup_strategy=4, do_stats=False):
+    env = get_game_setup(player_names, seed=seed, play_jokers=play_jokers, do_stats=do_stats, verbose=verbose)
+
+    player_total_rounds_rewards = {}
+    for name in env.players.keys():
+        player_total_rounds_rewards[name] = []
+    yaniv_declarers = []
+    round_winners = []
+    player_yaniv_thresh = {'Albert': 7, 'ANN': 7}  # {'Albert': 7, 'Roland': 7}
+    player_throw_out_strategy = {'Albert': 'highest_combination', 'ANN': 'highest_combination'}
+    player_pickup_strategy = {'Albert': fixed_pickup_strategy, 'ANN': None}
+
+    turn_seed = seed + 1
+    round_winner = None
+    name_start = list(env.players.keys())[:-1][0]
+    for round_number in range(1, n_rounds + 1):
+        name_start = next_starter_name(env, pervious_starter=name_start, previous_winner=round_winner, seed=turn_seed,
+                                       method=start_method)
+
+        next_name, observables = new_round(env, name=name_start, seed=turn_seed)
+
+        env.round_.round_output[round_number] = {}
+
+        player_round_rewards = {}
+        for name in env.players.keys():
+            player_round_rewards[name] = 0
+
+        yaniv_declarer = None
+        round_winner = None
+
+        for turn in range(1, n_turns_max + 1):
+            env.round_.turn_output = {}
+            turn_seed += 1
+            name = next_name
+
+            yaniv_thresh = player_yaniv_thresh[name]
+            throw_out_strategy = player_throw_out_strategy[name]
+            pickup_strategy = player_pickup_strategy[name]
+
+            if 'Albert' == name:
+                action = basic_policy(observables,
+                                      turn,
+                                      yaniv_thresh=yaniv_thresh,
+                                      throw_out=throw_out_strategy,
+                                      pickup=pickup_strategy,
+                                      seed=turn_seed)
+            elif 'ANN' == name:
+                action = ann_policy(model, observables,
+                                   turn, throw_out=throw_out_strategy,
+                                   seed=turn_seed)
+
+            # print(action)
+            next_name, observables, reward, done, info = step(env, name, action)
+            player_round_rewards[name] += reward
+
+            env.round_.round_output[round_number][turn] = env.round_.turn_output
+            if done:
+                yaniv_declarer = name
+                if info['yaniv_declare_correct'] == False:
+                    print('incorrect sum for Yaniv')
+
+                # TODO - update in case of info['yaniv_declare_correct'] == False
+                for name in env.players.keys():
+                    player_round_rewards[name] -= env.players[name].hand_points
+
+                round_winner = env.round_.round_output['winner']
+                break
+        if info['yaniv_declare_correct'] is None:
+            for name in env.players.keys():
+                player_round_rewards[name] += REWARD_NO_WINNER
+
+        # Testing to verify that all Assafs are different
+        # if round_winner != yaniv_declarer:
+        #    print(round_number, turn_seed)
+        #    print(env.round_.players[yaniv_declarer].cards_in_hand, yaniv_declarer)
+        #    print(env.round_.players[round_winner].cards_in_hand, round_winner)
+        #    print('-' * 20)
+
+        round_winners.append(round_winner)
+        yaniv_declarers.append(yaniv_declarer)
+
+        for name in env.players.keys():
+            player_total_rounds_rewards[name].append(player_round_rewards[name])
+
+        # if round_number < 5:
+        #    print(action)
+        #    print(observables)
+
+    df_results0 = pd.DataFrame(player_total_rounds_rewards)
+    df_results0['declarer'] = yaniv_declarers
+    df_results0['winner'] = round_winners
+
+    return df_results0
+
+
+def create_deck_pickup_dnn(n_inputs, seed=None, verbose=1, clear_session=True):
+    if clear_session:
+        keras.backend.clear_session()
+
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
+
+    model = keras.models.Sequential([
+        keras.layers.Dense(n_inputs + 1, activation="elu", input_shape=[n_inputs]),
+        keras.layers.Dense(1, activation="sigmoid"),
+    ])
+
+    if verbose:
+        print(model.summary())
+
+    return model
+
+
+def get_environment_vars(players_names, name, seed=None, play_jokers=False, verbose=0, do_stats=False):
+    """
+    Gets environment vars for player `name`.
+    Tested for len(players_names) == 2
+
+    :param players_names:
+    :param name:
+    :param seed:
+    :return:
+    """
+    turns_stopping = list(range(2, 41, len(players_names)))  # verifying that only observables for `name` is comine out
+
+    done = True
+
+    while done:
+        np.random.seed(seed)
+        turn_stop = np.random.choice(turns_stopping)
+        game_setup, observables, done = get_random_round_environment(players_names, name, seed=seed,
+                                                                     play_jokers=play_jokers,
+                                                                     verbose=verbose, turn_stop=turn_stop,
+                                                                     do_stats=do_stats)
+
+        if seed:
+            seed += 10000
+
+    return game_setup, observables, turn_stop
+
+
+def get_multiple_environment_vars(n_envs, players_names, name, seed=None):
+    l_game_setups = []
+    l_observables = []
+    l_turn = []
+
+    for ienv in range(n_envs):
+        if seed:
+            seed_env = ienv + seed
+        else:
+            seed_env = None
+
+        game_setup, observables, turn_stop = get_environment_vars(players_names, name, seed=seed_env)
+
+        l_game_setups.append(game_setup)
+        l_observables.append(observables)
+        l_turn.append(turn_stop)
+
+    return l_game_setups, l_observables, l_turn
+
+
+def train_deck_pickup_dnn_to_player(n_iters, n_envs, n_inputs,
+                                    basic_strategy=4, yaniv_thresh=None, throw_out_strategy='highest_combination',
+                                    max_turn = 40, seed=None
+                                    ):
+    """
+    Assuming simulation of two players, it will train a model to follow the deck pickup basic strategy of the first
+    player.
+
+
+    :param n_iters:
+    :param n_envs:
+    :param n_inputs:
+    :param basic_strategy:
+    :param yaniv_thresh:
+    :param throw_out_strategy:
+    :param max_turn:
+    :param seed:
+    :return:
+
+    Example usage:
+
+    # --- training ---
+    n_environments = 50
+    n_iterations = 200
+    n_inputs = 5 # [n_deck, card_value_lowest, turn_number, n_cards_i, ncards_j]
+
+    deck_pickup_dnn, l_losses = train_deck_pickup_dnn_to_player(n_iterations, n_environments, n_inputs, seed=2)
+
+    """
+
+
+    players_names = ['Albert', 'Roland']  # players in simulation
+    name = 'Albert'  # player that we are training to match
+
+    print(f'creating {n_envs} environments to train on')
+    l_game_setups, l_observables, l_turn = get_multiple_environment_vars(n_envs, players_names, name, seed=seed)
+
+    deck_pickup_dnn = create_deck_pickup_dnn(n_inputs, seed=1)
+    optimizer = keras.optimizers.RMSprop()
+    loss_fn = keras.losses.binary_crossentropy
+
+    l_losses = []  # for plotting
+
+    for iteration in range(n_iters):
+        target_probas = []
+        for ienv, (observables, turn_number) in enumerate(zip(l_observables, l_turn)):
+            target_action = basic_policy(observables, turn_number, seed=ienv,
+                                         yaniv_thresh=yaniv_thresh, throw_out=throw_out_strategy,
+                                         pickup=basic_strategy, deck_prob=None)
+            target_probas.append(target_action[-1])
+
+        target_probas = np.array(target_probas).reshape(-1, 1)
+
+        inputs = np.zeros([len(l_observables), n_inputs])
+        idx = 0
+        for observables, turn_number in zip(l_observables, l_turn):
+            this_input = observables_to_model_input(observables, turn_number, reshape=False)
+            inputs[idx, :] = this_input
+            idx += 1
+
+        with tf.GradientTape() as tape:
+            deck_pick_probas = deck_pickup_dnn(np.array(inputs))
+            loss = tf.reduce_mean(loss_fn(target_probas, deck_pick_probas))
+
+        str_ =  f"Iteration: {iteration} of {n_iters}"
+        str_ += f" Loss: {loss.numpy():.3f} "
+        str_ += f" Turns: ({np.min(l_turn):0.0f}, {np.mean(l_turn):0.1f}, {np.max(l_turn):0.0f})"
+        str_ += f" Targets: {target_probas[:4].ravel()} ({np.mean(target_probas):0.1f})"
+        print(str_, end="\r")
+        grads = tape.gradient(loss, deck_pickup_dnn.trainable_variables)
+        optimizer.apply_gradients(zip(grads, deck_pickup_dnn.trainable_variables))
+        l_losses.append(float(loss))
+
+        # updating environments
+        for ienv, [deck_prob, observables, game_setup, turn_number] in enumerate(zip(deck_pick_probas,
+                                                                                     l_observables,
+                                                                                     l_game_setups, l_turn
+                                                                                     )):
+
+            action = basic_policy(observables, turn_number, seed=ienv,
+                                  yaniv_thresh=yaniv_thresh, throw_out=throw_out_strategy,
+                                  pickup='random', deck_prob=deck_prob)
+
+            opponent_name, opponent_observables, my_reward, done, info = step(game_setup, name, action)
+
+            # probably should be somewhere else for more generic purposes ...
+            if not game_setup.round_.round_deck:
+                done = True
+
+            if turn_number > max_turn:
+                done = True
+
+            if done:
+                game_setup, observables, turn_number = get_environment_vars(players_names, name,
+                                                                               seed=iteration * 100000 + ienv)
+
+            else:
+                turn_number += 1  #  oppenent's turn
+                opponent_action = basic_policy(opponent_observables, turn_number, seed=ienv + 1,
+                                               yaniv_thresh=yaniv_thresh, throw_out=throw_out_strategy,
+                                               pickup=basic_strategy, deck_prob=None)
+
+                my_name, observables, opponent_reward, done_opponent, info = step(game_setup, opponent_name,
+                                                                                  opponent_action)
+                turn_number += 1  # my turn
+
+                if done_opponent:
+                    game_setup, observables, turn_number = get_environment_vars(players_names, name,
+                                                                                   seed=iteration * 100000 + ienv)
+
+            l_game_setups[ienv] = game_setup
+            l_observables[ienv] = observables
+            l_turn[ienv] = turn_number
+
+
+    return deck_pickup_dnn, l_losses
+
+
