@@ -91,6 +91,18 @@ From here we learn that:
  * Roland has `h_j=15` from cards ['2♥', '5♥', '3♠', '5♣']
  * Resulting in Albert not getting any points where Roland got 15 (all points are bad).
 
+# Reinforcement Learning
+This is a work in progress.  
+Currently there is a working Classifier that trains on the probability 
+that it should pick up from the deck of cards (or top of pile):
+
+Simulates two players, where both have basic deterministic policies (see `rl_utils.basic_policy`), 
+and a DNN trains on the policy of the first player.
+
+To test do:
+```bash
+python run_train_deck_pickup.py
+```
 
 # Human play
 
@@ -108,13 +120,14 @@ python 3
 * numpy 
 * scipy  
 * pandas
+* tensorflow 2 (for reinforcement learning)
 
 # Testing
 Run bash command 
 ```bash
 py.test
 ```
-(or `pyteset`)
+(or `pytest`)
 
 # Strategies Currently Used
 * Pull card: 

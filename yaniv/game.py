@@ -98,7 +98,7 @@ class Game():
 
         self.generate_players(players)
         self.deck = get_deck(play_jokers=play_jokers, shuffle=False, seed=self.seed)
-        if 1:
+        if verbose:
             print(f'Deck of {len(self.deck)} cards\n{list(map(card_to_pretty, self.deck))}')
         self.game_output = {}
 
@@ -124,7 +124,9 @@ class Game():
         '''
 
         self.all_players = []
-        print('generating players and their playing strategies:')
+
+        if self.verbose:
+            print('generating players and their playing strategies:')
 
         if isinstance(input_players, list):
             input_players = {name: 'bot' for name in input_players}
@@ -136,7 +138,8 @@ class Game():
             player.id = idx
             self.all_players.append(player)
 
-            print(f'{name} ({player.agent})')
+            if self.verbose:
+                print(f'{name} ({player.agent})')
 
 
     # TODO: randomise the first player (otherwise might bias the results)
@@ -553,10 +556,11 @@ class Round():
 
     def throw_cards_to_pile(self, name, cards_to_throw=None):
         player = self.players[name]
-        valid_combinations = cards_to_valid_throw_combinations(player.cards_in_hand)
-        sorted_combinations, sorted_combinations_sums = sort_card_combos(valid_combinations, descending=True, return_sum_values=True)
 
         if cards_to_throw is None:
+            valid_combinations = cards_to_valid_throw_combinations(player.cards_in_hand)
+            sorted_combinations, sorted_combinations_sums = sort_card_combos(valid_combinations, descending=True,
+                                                                             return_sum_values=True)
             if 'human' == player.agent:
                 options = {f'{idx}': option for idx, option in enumerate(sorted_combinations, 1)}
                 option_id = self.io_options(options, player, option_type='throw')
