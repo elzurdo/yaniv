@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
 
+import game
 from stats import calculate_p_hj_gt_hi_n_j_prior
-from cards import cards_to_number_jokers, cards_to_value_sum
+from cards import cards_to_number_jokers, cards_to_value_sum, sort_cards
 
 
 def _round_output_turn_keys_to_int(round_output):
@@ -50,7 +51,6 @@ def game_output_keys_to_int(game_output):
         game_output[round] = _round_output_turn_keys_to_int(game_output[round])
 
     return game_output
-
 
 
 def round_to_number_of_turns(round_output):
@@ -144,3 +144,126 @@ def round_output_to_turns_df(round_output):
     df = pd.DataFrame({turn: round_output[turn] for turn in np.arange(1, n_turns + 1)}).T
 
     return df
+
+
+def update_pov_knowledge(player, opponent_name, turn_output, verbose=1):
+    opponent_active = opponent_name == turn_output['name']
+
+    player.other_players_n_cards[opponent_name] = len(turn_output[f'{opponent_name}_cards'])
+
+    if not opponent_active:
+        player.cards_in_hand = turn_output[f'{player.name}_cards']
+        player.remove_cards_from_unknown(player.cards_in_hand)
+
+    cards_top_of_pile = turn_output['pile_top']
+    player.remove_cards_from_unknown(cards_top_of_pile)
+
+    if 'yaniv_call' in turn_output.keys():
+        player.cards_top_of_pile = cards_top_of_pile
+        return 'yaniv'
+
+    card_pile_pulled = None
+    if 'pile' == turn_output['pull_source']:
+        card_pile_pulled = turn_output['pulls']
+
+    cards_top_of_pile_left = list(set(cards_top_of_pile) - set([card_pile_pulled]))
+
+    if cards_top_of_pile_left:
+        player.add_cards_to_out_of_game(cards_top_of_pile_left)
+
+    if opponent_active:
+        player.knowledgewise_drop_cards_from_player(opponent_name, cards_top_of_pile)
+
+        if card_pile_pulled:
+            player.knowledgewise_assign_card_to_player(opponent_name, card_pile_pulled)
+
+    if verbose:
+        print(len(player.unknown_cards), len(player.cards_out_of_game), player.other_players_n_cards[opponent_name],
+              len(player.other_players_known_cards[opponent_name]))
+
+
+def player_to_df_knowledge(player, opponent_name, round_output):
+    cards_all = sort_cards(round_output['start']['deck_ordered'].copy())
+
+    df_pov = pd.DataFrame(0, columns=cards_all,
+                          index=['cards_in_hand', 'cards_top_of_pile', 'cards_out_of_game', 'opponent_cards',
+                                 'unknown_cards']).T
+    df_pov.loc[player.cards_in_hand, 'cards_in_hand'] = 1
+    df_pov.loc[player.cards_top_of_pile, 'cards_top_of_pile'] = 1
+    df_pov.loc[player.cards_out_of_game, 'cards_out_of_game'] = 1
+
+    df_pov.loc[player.unknown_cards, 'unknown_cards'] = 1.
+    df_pov.loc[player.other_players_known_cards[opponent_name], 'opponent_cards'] = 1
+
+    # verifying that all cards are accounted for
+    print(df_pov.sum(axis=1).sum(), len(cards_all))
+    assert df_pov.sum(axis=1).sum() == len(cards_all)
+
+    n_opponent_unkown_cards = player.other_players_n_cards[opponent_name] - len(
+        player.other_players_known_cards[opponent_name])
+    df_pov['opponent_cards'] = 0
+    df_pov.loc[player.other_players_known_cards[opponent_name], 'opponent_cards'] = 1
+    df_pov.loc[player.unknown_cards, 'opponent_cards'] = n_opponent_unkown_cards / len(player.unknown_cards)
+
+    # all fractions accounted for
+    assert np.abs(df_pov['opponent_cards'].sum() - player.other_players_n_cards[opponent_name]) < 1.e-5
+
+    del df_pov['unknown_cards']
+
+    return df_pov
+
+# TODO: does not work in all cases. See asserts for edge cases ...
+def round_input_to_pov_knowledge(pov_name, opponent_name, round_output):
+    """
+
+    :param pov_name:
+    :param opponent_name:
+    :param round_output:
+    :return:
+
+    Example use:
+    player_names = ['Albert','Roland'] #, 'Amos','Claude']
+    end_game_score = 200
+
+    do_stats = False
+    play_jokers = True
+    seed = 1
+
+    verbose = 1
+    game_ = game.Game(player_names, seed=seed, verbose=verbose, end_game_score=end_game_score,
+                      do_stats=do_stats, play_jokers=play_jokers)
+    game_output = game_.play()
+
+
+    round_number = 1
+    round_output = game_output[round_number].copy()
+    pov_name = 'Albert'
+    opponent_name = 'Roland'
+    round_input_to_pov_knowledge(pov_name, opponent_name, round_output)
+    """
+    turn_number_max = round_to_number_of_turns(round_output)
+    turn_numbers = range(1, turn_number_max + 1)
+
+    player = game.Player(pov_name)
+    player.cards_in_hand = round_output['start'][f'{pov_name}_cards']
+    player.other_players_known_cards = {}
+    player.other_players_known_cards[opponent_name] = []
+    player.other_players_n_cards = {}
+    print(len(player.unknown_cards))
+    player.add_cards_to_unknown(list(set(round_output['start']['deck_ordered']) - set(player.cards_in_hand)))
+
+    verbose = 0
+    for turn_number in turn_numbers:
+        turn_output = round_output[turn_number]
+
+        if verbose: print(turn_number)
+        update_pov_knowledge(player, opponent_name, turn_output, verbose=verbose)
+        if verbose: print('-' * 30)
+
+    return player_to_df_knowledge(player, opponent_name, round_output)
+
+
+
+
+
+

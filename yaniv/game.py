@@ -39,7 +39,8 @@ class Player():
         self.agent = agent
 
         self.starts_round = False
-        self.unknown_cards = []
+        self.unknown_cards = []  # TODO: consider making a set
+        self.cards_out_of_game = set()
 
     def sum_hand_points(self):
         '''Calculates the sum of point in a hand
@@ -49,8 +50,13 @@ class Player():
         for card in self.cards_in_hand:
             self.hand_points += card_to_value(card)
 
+    # TODO: look into this! Might best be a set ...
     def add_cards_to_unknown(self, cards):
         self.unknown_cards = self.unknown_cards + list(cards)
+
+    def add_cards_to_out_of_game(self, cards):
+        for card in cards:
+            self.cards_out_of_game.add(card)
 
     def remove_cards_from_unknown(self, cards):
         self.unknown_cards = list(set(self.unknown_cards) - set(cards))
@@ -495,6 +501,7 @@ class Round():
             player.strategy = pile_conservative_constant()
 
             self.turn_output['name'] = name
+            self.turn_output['pile_top'] = self.pile_top_cards
             self.turn_output['pile_top_accessible'] = list(pile_top_accessible_cards(self.pile_top_cards))
             #self.turn_output[name] = list(player.cards_in_hand) # this might be redundant information
             for name_j, player_j in players_ordered.items():
