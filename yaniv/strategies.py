@@ -25,7 +25,7 @@ def pile_conservative_vary(seed=None):
 def pile_conservative_constant():
     strategy = {}
 
-    strategy['pile_pull'] = {"highest_card_value_to_pull": 3}
+    strategy['pile_pull'] = {"highest_card_value_to_pull": 4}
 
     _complete(strategy)
 

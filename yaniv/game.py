@@ -8,9 +8,6 @@ from cards import (get_deck, card_to_pretty,
                    sort_card_combos,
                    card_to_value,
                    pile_top_accessible_cards,
-                   cards_to_values,
-                   cards_same_rank,
-                   sort_cards,
                    pile_cards_plus_player_collective_hypothetical_points
                    )
 
@@ -59,6 +56,7 @@ class Player():
             self.cards_out_of_game.add(card)
 
     def remove_cards_from_unknown(self, cards):
+        assert isinstance(cards, list) or isinstance(cards, set)
         self.unknown_cards = list(set(self.unknown_cards) - set(cards))
 
     def knowledgewise_assign_card_to_player(self, other_player_name, card):

@@ -185,6 +185,12 @@ def update_pov_knowledge(player, opponent_name, turn_output, verbose=1):
 
         if card_pile_pulled:
             player.knowledgewise_assign_card_to_player(opponent_name, card_pile_pulled)
+    else:
+        player.cards_in_hand.append(turn_output['pulls'])
+        #print('pulling', turn_output['pulls'], turn_output['pulls'] in player.unknown_cards)
+        player.remove_cards_from_unknown([turn_output['pulls']]) # correction for pulling from deck
+        #print('pulling', turn_output['pulls'], turn_output['pulls'] in player.unknown_cards)
+
 
     if verbose:
         print(len(player.unknown_cards), len(player.cards_out_of_game), player.other_players_n_cards[opponent_name],
@@ -197,6 +203,7 @@ def player_to_df_knowledge(player, opponent_name, round_output):
     df_pov = pd.DataFrame(0, columns=cards_all,
                           index=['cards_in_hand', 'cards_top_of_pile', 'cards_out_of_game', 'opponent_cards',
                                  'unknown_cards']).T
+    #print(player.cards_in_hand)
     df_pov.loc[player.cards_in_hand, 'cards_in_hand'] = 1
     df_pov.loc[player.cards_top_of_pile, 'cards_top_of_pile'] = 1
     df_pov.loc[player.cards_out_of_game, 'cards_out_of_game'] = 1
@@ -269,6 +276,48 @@ def round_input_to_pov_knowledge(pov_name, opponent_name, round_output):
         if verbose: print('-' * 30)
 
     return player_to_df_knowledge(player, opponent_name, round_output)
+
+
+def df_pov_to_series(df_pov):
+    cols = df_pov.columns.tolist()
+
+    idxs_ = []
+    vals_ = []
+
+    for col in cols:
+        cards = df_pov[df_pov[col] != 0].index.tolist()
+
+        for card in cards:
+            idxs_.append(f'{col}_{card}')
+            vals_.append(df_pov.loc[card, col])
+
+    return pd.Series(vals_, index=idxs_)
+
+
+def df_pov_to_series_alt(df_pov):
+    df_ = df_pov.rename(columns={'opponent_cards': 'unknown_cards'})
+
+    cols = df_.columns.tolist()
+
+    n_opponent_cards = int(np.round(np.sum(df_['unknown_cards'])))
+
+    idxs_ = ['n_opponent_cards']
+    vals_ = [n_opponent_cards]
+
+    for col in cols:
+        cards = df_[df_[col] != 0].index.tolist()
+
+        for card in cards:
+            col_card = f'{col}_{card}'
+
+            if 'unknown_cards' == col:
+                if 1 == df_.loc[card, col]:
+                    col_card = f'opponent_cards_{card}'
+
+            idxs_.append(col_card)
+            vals_.append(1)
+
+    return pd.Series(vals_, index=idxs_)
 
 
 
