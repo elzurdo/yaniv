@@ -155,6 +155,15 @@ def update_pov_knowledge(player, opponent_name, turn_output, verbose=1):
         player.cards_in_hand = turn_output[f'{player.name}_cards']
         player.remove_cards_from_unknown(player.cards_in_hand)
 
+    if 'throws' in turn_output.keys():
+        cards_thrown_to_pile = turn_output['throws']
+        if opponent_active:
+            player.remove_cards_from_unknown(cards_thrown_to_pile)
+            player.knowledgewise_drop_cards_from_player(opponent_name, cards_thrown_to_pile)
+        else:
+            player.cards_in_hand = list( set(player.cards_in_hand ) - set(cards_thrown_to_pile))
+
+
     cards_top_of_pile = turn_output['pile_top']
     player.remove_cards_from_unknown(cards_top_of_pile)
 
@@ -196,7 +205,7 @@ def player_to_df_knowledge(player, opponent_name, round_output):
     df_pov.loc[player.other_players_known_cards[opponent_name], 'opponent_cards'] = 1
 
     # verifying that all cards are accounted for
-    print(df_pov.sum(axis=1).sum(), len(cards_all))
+    #print(df_pov.sum(axis=1).sum(), len(cards_all))
     assert df_pov.sum(axis=1).sum() == len(cards_all)
 
     n_opponent_unkown_cards = player.other_players_n_cards[opponent_name] - len(
@@ -249,7 +258,6 @@ def round_input_to_pov_knowledge(pov_name, opponent_name, round_output):
     player.other_players_known_cards = {}
     player.other_players_known_cards[opponent_name] = []
     player.other_players_n_cards = {}
-    print(len(player.unknown_cards))
     player.add_cards_to_unknown(list(set(round_output['start']['deck_ordered']) - set(player.cards_in_hand)))
 
     verbose = 0
