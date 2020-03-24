@@ -1,5 +1,7 @@
 # !/usr/bin/env python
 # -*- coding: utf-8 -*-
+# mouse button push
+# https://stackoverflow.com/questions/12150957/pygame-action-when-mouse-click-on-rect
 
 """
 002_display_fps.py
@@ -35,14 +37,21 @@ def display_card(card, screen, location=(100, 100), scale_frac=1., hidden=False)
     if hidden:
         card_background.fill((128, 0, 128))
         screen.blit(card_background, location)
+
+        return None, None
     else:
         card_background.fill((255, 255, 255))
-        screen.blit(card_background, location)
-        screen.blit(card_picture, location)
+        b_background = screen.blit(card_background, location)
+        b_card = screen.blit(card_picture, location)
+
+        return b_card, b_background
 
 
-size_factor = 2.
-screen_size = ( int(640 * size_factor), int(480 * size_factor))
+
+
+
+size_factor = 1.5
+screen_size = (int(640 * size_factor), int(480 * size_factor))
 
 # Initialize Pygame.
 pygame.init()
@@ -75,9 +84,12 @@ ncards = len(cards)
 left_most = card_width / 2 + (MAX_CARDS - ncards) * CARD_WIDTH / 2
 
 
+cards_surfaces, cards_backgrounds = [], []
 for idx, card in enumerate(cards):
     x_location = left_most + (card_width * 1.02) * idx
-    display_card(card, screen, location=(x_location, bottom), scale_frac=scale_frac, hidden=False)
+    card_surface, card_background = display_card(card, screen, location=(x_location, bottom), scale_frac=scale_frac, hidden=False)
+    cards_surfaces.append(card_surface)
+    cards_backgrounds.append(card_background)
 
 # ======= Opponent's Cards ========
 bottom = screen_size[1] * 0.05
@@ -86,7 +98,6 @@ cards = ['dummy'] * 5
 
 ncards = len(cards)
 left_most = card_width / 2 + (MAX_CARDS - ncards) * CARD_WIDTH / 2
-
 
 for idx, card in enumerate(cards):
     x_location = left_most + (card_width * 1.02) * idx
